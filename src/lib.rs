@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::io;
 use std::path::{PathBuf, Path};
 use std::sync::Arc;
+use std::env;
 
 use rocket::Data;
 use rocket::http::ContentType;
@@ -18,6 +19,13 @@ use multipart::server::Multipart;
 use multipart::server::save::{SaveBuilder, SavedData, SaveResult, PartialReason, SavedField};
 
 use tempdir::TempDir;
+
+/// Options for parsing multipart/form-data.
+#[derive(Debug)]
+pub struct MultipartFormDataOptions {
+    pub size_limit: u64,
+    pub temporary_dir: PathBuf,
+}
 
 /// Parsed multipart/form-data.
 #[derive(Debug)]
@@ -60,9 +68,18 @@ pub enum MultipartFormDataError {
     FieldTypeAmbiguousError,
 }
 
+impl MultipartFormDataOptions {
+    pub fn new() -> MultipartFormDataOptions {
+        MultipartFormDataOptions {
+            size_limit: 8 * 1024 * 1024,
+            temporary_dir: env::temp_dir(),
+        }
+    }
+}
+
 impl MultipartFormData {
     /// Parse multipart/form-data from the HTTP body.
-    pub fn parse<P: AsRef<Path>>(content_type: &ContentType, data: Data, size_limit: u64, temporary_dir: P) -> Result<MultipartFormData, MultipartFormDataError> {
+    pub fn parse(content_type: &ContentType, data: Data, options: Option<MultipartFormDataOptions>) -> Result<MultipartFormData, MultipartFormDataError> {
         if !content_type.is_form_data() {
             return Err(MultipartFormDataError::NotFormDataError);
         }
@@ -72,11 +89,17 @@ impl MultipartFormData {
             None => return Err(MultipartFormDataError::BoundaryNotFoundError)
         };
 
-        let multipart = Multipart::with_body(data.open(), boundary);
+        let options = match options {
+            Some(options) => options,
+            None => MultipartFormDataOptions::new()
+        };
 
-        let save_builder = SaveBuilder::new(multipart).size_limit(size_limit).count_limit(None).memory_threshold(0).force_text();
+        let mut multipart = Multipart::with_body(data.open(), boundary);
 
-        let temp = save_builder.with_temp_dir(TempDir::new_in(temporary_dir, "rocket-multipart").map_err(|err| MultipartFormDataError::IOError(err))?);
+
+        let save_builder = SaveBuilder::new(multipart).size_limit(options.size_limit).count_limit(None).memory_threshold(0).force_text();
+
+        let temp = save_builder.with_temp_dir(TempDir::new_in(options.temporary_dir, "rocket-multipart").map_err(|err| MultipartFormDataError::IOError(err))?);
 
         match temp {
             SaveResult::Full(entries) => {
