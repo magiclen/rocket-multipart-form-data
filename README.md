@@ -1,3 +1,11 @@
+Multipart Form Data for Rocket Framework
+====================
+
+This crate provides a multipart parser for the Rocket framework.
+
+## Example
+
+```rust
 #![feature(plugin)]
 #![plugin(rocket_codegen)]
 
@@ -31,3 +39,8 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 
     "ok"
 }
+```
+
+## License
+
+[MIT](LICENSE)

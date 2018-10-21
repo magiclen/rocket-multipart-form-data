@@ -6,14 +6,14 @@ repository = "https://github.com/magiclen/rocket-multipart-form-data"
 homepage = "https://magiclen.org/rocket-multipart-form-data"
 keywords = ["rocket", "server", "web", "multipart"]
 categories = ["parsing"]
-description= "This crate provides a multipart parser."
+description= "This crate provides a multipart parser for the Rocket framework."
 readme = "README.md"
 license = "MIT"
 
 [dependencies]
 rocket = "0.3.16"
 multipart = "0.15.3"
-tempdir = "0.3.7"
+chrono = "0.4.6"
 
 [dev-dependencies]
 rocket_codegen = "0.3.16"
