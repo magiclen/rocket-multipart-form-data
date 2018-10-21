@@ -99,6 +99,7 @@ pub enum FileField {
 #[derive(Debug)]
 pub struct SingleTextField {
     pub content_type: Option<Mime>,
+    pub file_name: Option<String>,
     pub text: String,
 }
 
@@ -192,9 +193,11 @@ impl MultipartFormData {
                         let text = String::from_utf8(text_buffer).map_err(|err| MultipartFormDataError::FromUtf8Error(err))?;
 
                         let content_type = entry.headers.content_type;
+                        let file_name = entry.headers.filename;
 
                         let f = SingleTextField {
                             content_type,
+                            file_name,
                             text,
                         };
 
