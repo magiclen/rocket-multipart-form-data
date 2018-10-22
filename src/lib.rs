@@ -117,7 +117,8 @@ use chrono::prelude::*;
 
 use rocket::Data;
 use rocket::http::ContentType;
-pub use rocket::http::hyper::mime::{Mime, TopLevel, SubLevel};
+pub use rocket::http::hyper::mime;
+use rocket::http::hyper::mime::{Mime, TopLevel, SubLevel};
 
 use multipart::server::Multipart;
 
