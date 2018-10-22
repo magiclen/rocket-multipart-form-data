@@ -507,7 +507,7 @@ impl MultipartFormData {
                                     let mut bytes = Vec::new();
 
                                     loop {
-                                        let c = data.read(&mut bytes).map_err(|err| MultipartFormDataError::IOError(err))?;
+                                        let c = data.read(&mut buffer).map_err(|err| MultipartFormDataError::IOError(err))?;
 
                                         if c == 0 {
                                             break;
