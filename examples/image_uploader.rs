@@ -30,12 +30,12 @@ use rocket_raw_response::RawResponse;
 use rocket::response::Response;
 
 static_resources_initialize!(
-   "html-image-upload", "examples/front-end/html/image-upload.html",
+   "html-image-uploadr", "examples/front-end/html/image-uploadr.html",
 );
 
 #[get("/")]
 fn index(etag_if_none_match: EtagIfNoneMatch) -> Response<'static> {
-    static_response!(etag_if_none_match, "html-image-upload")
+    static_response!(etag_if_none_match, "html-image-uploadr")
 }
 
 #[post("/upload", data = "<data>")]
