@@ -1,108 +1,120 @@
-//! # Multipart Form Data for Rocket Framework
-//! This crate provides a multipart parser for the Rocket framework.
-//!
-//! ## Example
-//!
-//! ```
-//! #![feature(plugin)]
-//! #![plugin(rocket_codegen)]
-//!
-//! extern crate rocket;
-//! extern crate rocket_multipart_form_data;
-//!
-//! use rocket::Data;
-//! use rocket::http::ContentType;
-//!
-//! use rocket_multipart_form_data::{MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, FileField, TextField, RawField};
-//!
-//! #[post("/", data = "<data>")]
-//! fn index(content_type: &ContentType, data: Data) -> &'static str
-//! {
-//!     let mut options = MultipartFormDataOptions::new();
-//!     options.allowed_fields.push(MultipartFormDataField::file("photo").content_type_by_string(Some("image/*")).unwrap());
-//!     options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096));
-//!     options.allowed_fields.push(MultipartFormDataField::text("name"));
-//!     options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-//!     options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-//!     options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-//!
-//!     let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
-//!
-//!     let photo = multipart_form_data.files.get(&"photo".to_string());
-//!     let fingerprint = multipart_form_data.raw.get(&"fingerprint".to_string());
-//!     let name = multipart_form_data.texts.get(&"name".to_string());
-//!     let array = multipart_form_data.texts.get(&"array_max_length_3".to_string());
-//!
-//!     if let Some(photo) = photo {
-//!         match photo {
-//!             FileField::Single(file) => {
-//!                 let _content_type = &file.content_type;
-//!                 let _file_name = &file.file_name;
-//!                 let _path = &file.path;
-//!                 // You can now deal with the uploaded file. The file will be delete automatically when the MultipartFormData instance is dropped. If you want to handle that file by your own, instead of killing it, just remove it out from the MultipartFormData instance.
-//!             }
-//!             FileField::Multiple(_files) => {
-//!                 // Because we only put one "photo" field to the allowed_fields, this arm will not be matched.
-//!             }
-//!         }
-//!     }
-//!
-//!     if let Some(fingerprint) = fingerprint {
-//!         match fingerprint {
-//!             RawField::Single(raw) => {
-//!                 let _content_type = &raw.content_type;
-//!                 let _file_name = &raw.file_name;
-//!                 let _raw = &raw.raw;
-//!                 // You can now deal with the raw data.
-//!             }
-//!             RawField::Multiple(_bytes) => {
-//!                 // Because we only put one "fingerprint" field to the allowed_fields, this arm will not be matched.
-//!             }
-//!         }
-//!     }
-//!
-//!     if let Some(name) = name {
-//!         match name {
-//!             TextField::Single(text) => {
-//!                 let _content_type = &text.content_type;
-//!                 let _file_name = &text.file_name;
-//!                 let _text = &text.text;
-//!                 // You can now deal with the raw data.
-//!             }
-//!             TextField::Multiple(_texts) => {
-//!                 // Because we only put one "text" field to the allowed_fields, this arm will not be matched.
-//!             }
-//!         }
-//!     }
-//!
-//!     if let Some(array) = array {
-//!         match array {
-//!             TextField::Single(text) => {
-//!                 let _content_type = &text.content_type;
-//!                 let _file_name = &text.file_name;
-//!                 let _text = &text.text;
-//!                 // You can now deal with the text data.
-//!             }
-//!             TextField::Multiple(texts) => {
-//!                 // Because we put "array_max_length_3" field to the allowed_fields for three times, this arm will probably be matched.
-//!
-//!                 for text in texts { // The max length of the "texts" variable is 3
-//!                     let _content_type = &text.content_type;
-//!                     let _file_name = &text.file_name;
-//!                     let _text = &text.text;
-//!                     // You can now deal with the text data.
-//!                 }
-//!             }
-//!         }
-//!     }
-//!
-//!     "ok"
-//! }
-//! ```
+/*!
+# Multipart Form Data for Rocket Framework
 
+This crate provides a multipart parser for the Rocket framework.
+
+## Example
+
+```rust
+#![feature(plugin)]
+#![plugin(rocket_codegen)]
+
+extern crate rocket;
+extern crate rocket_multipart_form_data;
+
+use rocket::Data;
+use rocket::http::ContentType;
+
+use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, FileField, TextField, RawField};
+
+#[post("/", data = "<data>")]
+fn index(content_type: &ContentType, data: Data) -> &'static str
+{
+    let mut options = MultipartFormDataOptions::new();
+    options.allowed_fields.push(MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
+    options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096));
+    options.allowed_fields.push(MultipartFormDataField::text("name"));
+    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
+    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
+    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
+
+    let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
+
+    let photo = multipart_form_data.files.get(&"photo".to_string());
+    let fingerprint = multipart_form_data.raw.get(&"fingerprint".to_string());
+    let name = multipart_form_data.texts.get(&"name".to_string());
+    let array = multipart_form_data.texts.get(&"array_max_length_3".to_string());
+
+    if let Some(photo) = photo {
+        match photo {
+            FileField::Single(file) => {
+                let _content_type = &file.content_type;
+                let _file_name = &file.file_name;
+                let _path = &file.path;
+                // You can now deal with the uploaded file. The file will be delete automatically when the MultipartFormData instance is dropped. If you want to handle that file by your own, instead of killing it, just remove it out from the MultipartFormData instance.
+            }
+            FileField::Multiple(_files) => {
+                // Because we only put one "photo" field to the allowed_fields, this arm will not be matched.
+            }
+        }
+    }
+
+    if let Some(fingerprint) = fingerprint {
+        match fingerprint {
+            RawField::Single(raw) => {
+                let _content_type = &raw.content_type;
+                let _file_name = &raw.file_name;
+                let _raw = &raw.raw;
+                // You can now deal with the raw data.
+            }
+            RawField::Multiple(_bytes) => {
+                // Because we only put one "fingerprint" field to the allowed_fields, this arm will not be matched.
+            }
+        }
+    }
+
+    if let Some(name) = name {
+        match name {
+            TextField::Single(text) => {
+                let _content_type = &text.content_type;
+                let _file_name = &text.file_name;
+                let _text = &text.text;
+                // You can now deal with the raw data.
+            }
+            TextField::Multiple(_texts) => {
+                // Because we only put one "text" field to the allowed_fields, this arm will not be matched.
+            }
+        }
+    }
+
+    if let Some(array) = array {
+        match array {
+            TextField::Single(text) => {
+                let _content_type = &text.content_type;
+                let _file_name = &text.file_name;
+                let _text = &text.text;
+                // You can now deal with the text data.
+            }
+            TextField::Multiple(texts) => {
+                // Because we put "array_max_length_3" field to the allowed_fields for three times, this arm will probably be matched.
+
+                for text in texts { // The max length of the "texts" variable is 3
+                    let _content_type = &text.content_type;
+                    let _file_name = &text.file_name;
+                    let _text = &text.text;
+                    // You can now deal with the text data.
+                }
+            }
+        }
+    }
+
+    "ok"
+}
+```
+
+Also see `examples`.
+*/
+
+pub extern crate mime;
 extern crate rocket;
 extern crate multipart;
 extern crate chrono;
+
+mod multipart_form_data_type;
+mod multipart_form_data_field;
+
+pub use multipart_form_data_type::MultipartFormDataType;
+pub use multipart_form_data_field::*;
 
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
@@ -111,145 +123,26 @@ use std::sync::Arc;
 use std::env;
 use std::string;
 use std::fs::{self, File};
-use std::cmp::{Eq, PartialEq, PartialOrd, Ord, Ordering};
+use std::str::FromStr;
 
 use chrono::prelude::*;
 
+use mime::Mime;
+
 use rocket::Data;
 use rocket::http::ContentType;
-pub use rocket::http::hyper::mime;
-use rocket::http::hyper::mime::{Mime, TopLevel, SubLevel};
+use rocket::http::hyper::{self, mime::{TopLevel, SubLevel}};
 
 use multipart::server::Multipart;
 
-const BUFFER_SIZE: usize = 4096;
-
-const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1 * 1024 * 1024;
-const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
-
 #[derive(Debug)]
-pub enum MultipartFormDataType {
-    /// Stored the parsed data as a string.
-    Text,
-    /// Stored the parsed data as a Vec<u8> instance.
-    Raw,
-    /// Stored the parsed data as a file.
-    File,
-}
-
-/// The guarder for fields.
-#[derive(Debug)]
-pub struct MultipartFormDataField<'a> {
-    /// The type of this field.
-    pub t: MultipartFormDataType,
-    /// The name of this field.
-    pub field_name: &'a str,
-    /// The size limit for this field.
-    pub size_limit: u64,
-    /// To filter the content types. It supports stars.
-    pub content_type: Option<Vec<Mime>>,
-}
-
-impl<'a> MultipartFormDataField<'a> {
-    /// Create a text field, the default size_limit is 1 MiB.
-    pub fn text(field_name: &'a str) -> MultipartFormDataField<'a> {
-        MultipartFormDataField {
-            t: MultipartFormDataType::Text,
-            field_name,
-            size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
-            content_type: None,
-        }
-    }
-
-    /// Create a raw field, the default size_limit is 1 MiB.
-    pub fn bytes(field_name: &'a str) -> MultipartFormDataField<'a> {
-        Self::raw(field_name)
-    }
-
-    /// Create a raw field, the default size_limit is 1 MiB.
-    pub fn raw(field_name: &'a str) -> MultipartFormDataField<'a> {
-        MultipartFormDataField {
-            t: MultipartFormDataType::Raw,
-            field_name,
-            size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
-            content_type: None,
-        }
-    }
-
-    /// Create a file field, the default size_limit is 8 MiB.
-    pub fn file(field_name: &'a str) -> MultipartFormDataField<'a> {
-        MultipartFormDataField {
-            t: MultipartFormDataType::File,
-            field_name,
-            size_limit: DEFAULT_FILE_DATA_LIMIT,
-            content_type: None,
-        }
-    }
-
-    /// Set the size_limit for this field.
-    pub fn size_limit(mut self, size_limit: u64) -> MultipartFormDataField<'a> {
-        self.size_limit = size_limit;
-        self
-    }
-
-    /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
-    pub fn content_type(mut self, content_type: Option<Mime>) -> MultipartFormDataField<'a> {
-        match content_type {
-            Some(content_type) => {
-                match self.content_type {
-                    Some(mut v) => {
-                        v.push(content_type);
-                        self.content_type = Some(v);
-                    }
-                    None => {
-                        self.content_type = Some(vec![content_type]);
-                    }
-                }
-            }
-            None => self.content_type = None
-        }
-        self
-    }
-
-    /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
-    pub fn content_type_by_string(mut self, content_type: Option<&'a str>) -> Result<MultipartFormDataField<'a>, ()> {
-        match content_type {
-            Some(content_type) => {
-                let content_type: Mime = content_type.parse()?;
-                match self.content_type {
-                    Some(mut v) => {
-                        v.push(content_type);
-                        self.content_type = Some(v);
-                    }
-                    None => {
-                        self.content_type = Some(vec![content_type]);
-                    }
-                }
-            }
-            None => self.content_type = None
-        }
-        Ok(self)
-    }
-}
-
-impl<'a> PartialEq for MultipartFormDataField<'a> {
-    fn eq(&self, other: &Self) -> bool {
-        self.field_name.eq(other.field_name)
-    }
-}
-
-impl<'a> Eq for MultipartFormDataField<'a> {}
-
-impl<'a> PartialOrd for MultipartFormDataField<'a> {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.field_name.partial_cmp(other.field_name)
-    }
-}
-
-impl<'a> Ord for MultipartFormDataField<'a> {
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.field_name.cmp(other.field_name)
-    }
+pub enum MultipartFormDataError {
+    NotFormDataError,
+    BoundaryNotFoundError,
+    IOError(io::Error),
+    FromUtf8Error(string::FromUtf8Error),
+    DataTooLargeError(Arc<String>),
+    DataTypeError(Arc<String>),
 }
 
 /// Options for parsing multipart/form-data.
@@ -261,64 +154,6 @@ pub struct MultipartFormDataOptions<'a> {
     pub allowed_fields: Vec<MultipartFormDataField<'a>>,
 }
 
-/// Parsed multipart/form-data.
-#[derive(Debug)]
-pub struct MultipartFormData {
-    pub files: HashMap<Arc<String>, FileField>,
-    pub raw: HashMap<Arc<String>, RawField>,
-    pub texts: HashMap<Arc<String>, TextField>,
-}
-
-#[derive(Debug)]
-pub struct SingleFileField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub path: PathBuf,
-}
-
-#[derive(Debug)]
-pub enum FileField {
-    Single(SingleFileField),
-    Multiple(Vec<SingleFileField>),
-}
-
-#[derive(Debug)]
-pub struct SingleRawField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub raw: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub enum RawField {
-    Single(SingleRawField),
-    Multiple(Vec<SingleRawField>),
-}
-
-#[derive(Debug)]
-pub struct SingleTextField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub text: String,
-}
-
-#[derive(Debug)]
-pub enum TextField {
-    Single(SingleTextField),
-    Multiple(Vec<SingleTextField>),
-}
-
-#[derive(Debug)]
-pub enum MultipartFormDataError {
-    NotFormDataError,
-    BoundaryNotFoundError,
-    BodySizeTooLargeError,
-    IOError(io::Error),
-    FieldTypeAmbiguousError,
-    FromUtf8Error(string::FromUtf8Error),
-    DataTooLargeError(Arc<String>),
-}
-
 impl<'a> MultipartFormDataOptions<'a> {
     /// Create a default `MultipartFormDataOptions` instance.
     pub fn new() -> MultipartFormDataOptions<'a> {
@@ -327,6 +162,14 @@ impl<'a> MultipartFormDataOptions<'a> {
             allowed_fields: Vec::new(),
         }
     }
+}
+
+/// Parsed multipart/form-data.
+#[derive(Debug)]
+pub struct MultipartFormData {
+    pub files: HashMap<Arc<String>, FileField>,
+    pub raw: HashMap<Arc<String>, RawField>,
+    pub texts: HashMap<Arc<String>, TextField>,
 }
 
 impl MultipartFormData {
@@ -377,14 +220,15 @@ impl MultipartFormData {
 
                                     let (top, sub) = match &content_type {
                                         Some(content_type) => {
-                                            let Mime(top, sub, _) = content_type;
+                                            let hyper::mime::Mime(top, sub, _) = content_type;
                                             (Some(top), Some(sub))
                                         }
                                         None => (None, None)
                                     };
 
                                     for content_type_ref in content_type_ref {
-                                        let Mime(top_ref, sub_ref, _) = content_type_ref;
+                                        let mime = hyper::mime::Mime::from_str(content_type_ref.as_ref()).unwrap();
+                                        let hyper::mime::Mime(top_ref, sub_ref, _) = mime;
                                         if top_ref.ne(&TopLevel::Star) {
                                             if let Some(top) = top {
                                                 if top_ref.ne(top) {
@@ -410,7 +254,7 @@ impl MultipartFormData {
                                     }
 
                                     if !mat {
-                                        continue 'accept;
+                                        return Err(MultipartFormDataError::DataTypeError(field_name));
                                     }
 
                                     // The content type has been checked
@@ -420,9 +264,9 @@ impl MultipartFormData {
                             let field = options.allowed_fields.remove(vi);
 
                             let mut data = entry.data;
-                            let mut buffer = [0u8; BUFFER_SIZE];
+                            let mut buffer = [0u8; 4096];
 
-                            match field.t {
+                            match field.typ {
                                 MultipartFormDataType::File => {
                                     let now = Utc::now();
 
@@ -480,7 +324,7 @@ impl MultipartFormData {
                                     let file_name = entry.headers.filename;
 
                                     let f = SingleFileField {
-                                        content_type,
+                                        content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                                         file_name,
                                         path: target_path,
                                     };
@@ -523,7 +367,7 @@ impl MultipartFormData {
                                     let file_name = entry.headers.filename;
 
                                     let f = SingleRawField {
-                                        content_type,
+                                        content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                                         file_name,
                                         raw: bytes,
                                     };
@@ -568,7 +412,7 @@ impl MultipartFormData {
                                     let file_name = entry.headers.filename;
 
                                     let f = SingleTextField {
-                                        content_type,
+                                        content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                                         file_name,
                                         text,
                                     };
