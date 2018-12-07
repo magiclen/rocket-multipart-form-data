@@ -1,6 +1,5 @@
-#![feature(plugin)]
 #![feature(const_vec_new)]
-#![plugin(rocket_codegen)]
+#![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
 extern crate lazy_static;
@@ -13,6 +12,7 @@ extern crate rocket_include_static_resources;
 
 extern crate rocket_raw_response;
 
+#[macro_use]
 extern crate rocket;
 
 extern crate rocket_multipart_form_data;
