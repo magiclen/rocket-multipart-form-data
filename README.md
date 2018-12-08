@@ -10,8 +10,7 @@ This crate provides a multipart parser for the Rocket framework.
 ```rust
 #![feature(proc_macro_hygiene, decl_macro)]
 
-#[macro_use]
-extern crate rocket;
+#[macro_use] extern crate rocket;
 extern crate rocket_multipart_form_data;
 
 use rocket::Data;
