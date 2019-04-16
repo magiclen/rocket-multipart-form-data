@@ -31,10 +31,10 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 
     let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
 
-    let photo = multipart_form_data.files.get(&"photo".to_string());
-    let fingerprint = multipart_form_data.raw.get(&"fingerprint".to_string());
-    let name = multipart_form_data.texts.get(&"name".to_string());
-    let array = multipart_form_data.texts.get(&"array_max_length_3".to_string());
+    let photo = multipart_form_data.files.get("photo");
+    let fingerprint = multipart_form_data.raw.get("fingerprint");
+    let name = multipart_form_data.texts.get("name");
+    let array = multipart_form_data.texts.get("array_max_length_3");
 
     if let Some(photo) = photo {
         match photo {

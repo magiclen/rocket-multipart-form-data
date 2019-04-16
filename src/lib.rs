@@ -29,10 +29,10 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 
     let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
 
-    let photo = multipart_form_data.files.get(&"photo".to_string());
-    let fingerprint = multipart_form_data.raw.get(&"fingerprint".to_string());
-    let name = multipart_form_data.texts.get(&"name".to_string());
-    let array = multipart_form_data.texts.get(&"array_max_length_3".to_string());
+    let photo = multipart_form_data.files.get("photo");
+    let fingerprint = multipart_form_data.raw.get("fingerprint");
+    let name = multipart_form_data.texts.get("name");
+    let array = multipart_form_data.texts.get("array_max_length_3");
 
     if let Some(photo) = photo {
         match photo {
@@ -140,8 +140,8 @@ pub enum MultipartFormDataError {
     BoundaryNotFoundError,
     IOError(io::Error),
     FromUtf8Error(string::FromUtf8Error),
-    DataTooLargeError(Arc<String>),
-    DataTypeError(Arc<String>),
+    DataTooLargeError(Arc<str>),
+    DataTypeError(Arc<str>),
 }
 
 /// Options for parsing multipart/form-data.
@@ -166,9 +166,9 @@ impl<'a> MultipartFormDataOptions<'a> {
 /// Parsed multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormData {
-    pub files: HashMap<Arc<String>, FileField>,
-    pub raw: HashMap<Arc<String>, RawField>,
-    pub texts: HashMap<Arc<String>, TextField>,
+    pub files: HashMap<Arc<str>, FileField>,
+    pub raw: HashMap<Arc<str>, RawField>,
+    pub texts: HashMap<Arc<str>, TextField>,
 }
 
 impl MultipartFormData {
@@ -210,7 +210,7 @@ impl MultipartFormData {
                     let content_type = entry.headers.content_type;
 
                     'accept: loop {
-                        if let Ok(vi) = options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name.as_str())) {
+                        if let Ok(vi) = options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name)) {
                             {
                                 let field_ref = &options.allowed_fields[vi];
 

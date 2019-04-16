@@ -1,11 +1,11 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.4.1"
+version = "0.5.0"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/rocket-multipart-form-data"
 homepage = "https://magiclen.org/rocket-multipart-form-data"
 keywords = ["rocket", "server", "web", "multipart", "form-data"]
-categories = ["parsing"]
+categories = ["parser-implementations"]
 description= "This crate provides a multipart parser for the Rocket framework."
 readme = "README.md"
 license = "MIT"
@@ -16,7 +16,7 @@ travis-ci = { repository = "magiclen/rocket-multipart-form-data", branch = "mast
 [dependencies]
 rocket = "0.4"
 mime = "0.3.12"
-multipart = "0.15.3"
+multipart = "0.16.1"
 chrono = "0.4.6"
 
 rocket-include-static-resources = "0.7"

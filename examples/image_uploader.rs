@@ -52,7 +52,7 @@ fn upload(content_type: &ContentType, data: Data) -> RawResponse {
         }
     };
 
-    let image = multipart_form_data.raw.remove(&"image".to_string());
+    let image = multipart_form_data.raw.remove("image");
 
     match image {
         Some(image) => match image {
