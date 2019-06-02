@@ -211,6 +211,8 @@ impl MultipartFormData {
 
                     'accept: loop {
                         if let Ok(vi) = options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name)) {
+                            let mut buffer = [0u8; 4096];
+
                             {
                                 let field_ref = &options.allowed_fields[vi];
 
@@ -253,7 +255,38 @@ impl MultipartFormData {
                                     }
 
                                     if !mat {
-                                        return Err(MultipartFormDataError::DataTypeError(field_name));
+                                        let field = options.allowed_fields.remove(vi);
+
+                                        let mut data = entry.data;
+
+                                        let rtn = Err(MultipartFormDataError::DataTypeError(field_name));
+
+                                        let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
+
+                                        let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
+                                            u64::max_value()
+                                        } else {
+                                            tolerant_size_limit as u64
+                                        };
+
+                                        let mut sum_c = 0;
+
+                                        loop {
+                                            if sum_c > tolerant_size_limit {
+                                                return rtn;
+                                            }
+
+                                            let c = match data.read(&mut buffer) {
+                                                Ok(c) => c,
+                                                Err(_) => return rtn
+                                            };
+
+                                            if c == 0 {
+                                                return rtn;
+                                            }
+
+                                            sum_c += c as u64;
+                                        }
                                     }
 
                                     // The content type has been checked
@@ -263,7 +296,6 @@ impl MultipartFormData {
                             let field = options.allowed_fields.remove(vi);
 
                             let mut data = entry.data;
-                            let mut buffer = [0u8; 4096];
 
                             match field.typ {
                                 MultipartFormDataType::File => {
@@ -311,7 +343,33 @@ impl MultipartFormData {
 
                                         if sum_c > field.size_limit {
                                             try_delete(&target_path);
-                                            return Err(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
+
+                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
+                                                u64::max_value()
+                                            } else {
+                                                tolerant_size_limit as u64
+                                            };
+
+                                            loop {
+                                                if sum_c > tolerant_size_limit {
+                                                    return rtn;
+                                                }
+
+                                                let c = match data.read(&mut buffer) {
+                                                    Ok(c) => c,
+                                                    Err(_) => return rtn
+                                                };
+
+                                                if c == 0 {
+                                                    return rtn;
+                                                }
+
+                                                sum_c += c as u64;
+                                            }
                                         }
 
                                         file.write(&buffer[..c]).map_err(|err| {
@@ -352,12 +410,41 @@ impl MultipartFormData {
                                     loop {
                                         let c = data.read(&mut buffer).map_err(|err| MultipartFormDataError::IOError(err))?;
 
+                                        println!("c = {}", c);
+
                                         if c == 0 {
                                             break;
                                         }
 
                                         if bytes.len() as u64 + c as u64 > field.size_limit {
-                                            return Err(MultipartFormDataError::DataTooLargeError(field_name));
+                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
+
+                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
+                                                u64::max_value()
+                                            } else {
+                                                tolerant_size_limit as u64
+                                            };
+
+                                            let mut sum_c = (bytes.len() + c) as u64;
+
+                                            loop {
+                                                if sum_c > tolerant_size_limit {
+                                                    return rtn;
+                                                }
+
+                                                let c = match data.read(&mut buffer) {
+                                                    Ok(c) => c,
+                                                    Err(_) => return rtn
+                                                };
+
+                                                if c == 0 {
+                                                    return rtn;
+                                                }
+
+                                                sum_c += c as u64;
+                                            }
                                         }
 
                                         bytes.extend_from_slice(&buffer[..c]);
@@ -400,7 +487,34 @@ impl MultipartFormData {
                                         }
 
                                         if text_buffer.len() as u64 + c as u64 > field.size_limit {
-                                            return Err(MultipartFormDataError::DataTooLargeError(field_name));
+                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
+
+                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
+                                                u64::max_value()
+                                            } else {
+                                                tolerant_size_limit as u64
+                                            };
+
+                                            let mut sum_c = (text_buffer.len() + c) as u64;
+
+                                            loop {
+                                                if sum_c > tolerant_size_limit {
+                                                    return rtn;
+                                                }
+
+                                                let c = match data.read(&mut buffer) {
+                                                    Ok(c) => c,
+                                                    Err(_) => return rtn
+                                                };
+
+                                                if c == 0 {
+                                                    return rtn;
+                                                }
+
+                                                sum_c += c as u64;
+                                            }
                                         }
 
                                         text_buffer.extend_from_slice(&buffer[..c]);

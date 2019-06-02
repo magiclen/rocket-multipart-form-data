@@ -8,6 +8,8 @@ use mime::Mime;
 
 const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1 * 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
+const DEFAULT_TOLERANCE: f64 = 1f64;
+const DEFAULT_FULLY_READ: bool = false;
 
 /// The guarder for fields.
 #[derive(Debug, Clone)]
@@ -19,7 +21,11 @@ pub struct MultipartFormDataField<'a> {
     /// The size limit for this field.
     pub size_limit: u64,
     /// To filter the content types. It supports stars.
-    pub content_type: Option<Vec<Mime>>,
+    pub content_type: Option<(Vec<Mime>)>,
+    /// Try to read more than the size limit (but not store) until reaching the scale of the size limit in order to have chance to response `DataTooLargeError`.
+    pub tolerance: f64,
+    /// Try to read fully until reaching the scale of the size limit even though the content type is not matched in order to have chance to response `DataTypeError`.
+    pub fully_read: bool,
 }
 
 impl<'a> MultipartFormDataField<'a> {
@@ -30,6 +36,8 @@ impl<'a> MultipartFormDataField<'a> {
             field_name,
             size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
+            tolerance: DEFAULT_TOLERANCE,
+            fully_read: DEFAULT_FULLY_READ,
         }
     }
 
@@ -45,6 +53,8 @@ impl<'a> MultipartFormDataField<'a> {
             field_name,
             size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
+            tolerance: DEFAULT_TOLERANCE,
+            fully_read: DEFAULT_FULLY_READ,
         }
     }
 
@@ -55,12 +65,24 @@ impl<'a> MultipartFormDataField<'a> {
             field_name,
             size_limit: DEFAULT_FILE_DATA_LIMIT,
             content_type: None,
+            tolerance: DEFAULT_TOLERANCE,
+            fully_read: DEFAULT_FULLY_READ,
         }
     }
 
     /// Set the size_limit for this field.
     pub fn size_limit(mut self, size_limit: u64) -> MultipartFormDataField<'a> {
         self.size_limit = size_limit;
+        self
+    }
+
+    /// Add the tolerance for the size_limit.
+    pub fn tolerance(mut self, tolerance: f64) -> MultipartFormDataField<'a> {
+        if tolerance < 1.0 {
+            self.tolerance = 1.0;
+        } else {
+            self.tolerance = tolerance;
+        }
         self
     }
 
@@ -101,6 +123,12 @@ impl<'a> MultipartFormDataField<'a> {
             None => self.content_type = None
         }
         Ok(self)
+    }
+
+    /// Set whether fully read data even though the content type is not matched.
+    pub fn fully_read(mut self, fully_read: bool) -> MultipartFormDataField<'a> {
+        self.fully_read = fully_read;
+        self
     }
 }
 

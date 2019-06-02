@@ -2,12 +2,6 @@
 #![feature(proc_macro_hygiene, decl_macro)]
 
 #[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
-extern crate lazy_static_include;
-
-#[macro_use]
 extern crate rocket_include_static_resources;
 
 extern crate rocket_raw_response;
@@ -20,34 +14,28 @@ extern crate rocket_multipart_form_data;
 use rocket::Data;
 use rocket::http::ContentType;
 
+use rocket_include_static_resources::{EtagIfNoneMatch, StaticResponse};
+
 use rocket_multipart_form_data::mime;
 use rocket_multipart_form_data::{MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, MultipartFormDataError, RawField};
 
-use rocket_include_static_resources::EtagIfNoneMatch;
-
 use rocket_raw_response::RawResponse;
 
-use rocket::response::Response;
-
-static_resources_initialize!(
-   "html-image-uploadr", "examples/front-end/html/image-uploadr.html",
-);
-
 #[get("/")]
-fn index(etag_if_none_match: EtagIfNoneMatch) -> Response<'static> {
-    static_response!(etag_if_none_match, "html-image-uploadr")
+fn index(etag_if_none_match: EtagIfNoneMatch) -> StaticResponse {
+    static_response!(etag_if_none_match, "html-image-uploader")
 }
 
 #[post("/upload", data = "<data>")]
-fn upload(content_type: &ContentType, data: Data) -> RawResponse {
+fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
     let mut options = MultipartFormDataOptions::new();
-    options.allowed_fields.push(MultipartFormDataField::raw("image").size_limit(32 * 1024 * 1024).content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
+    options.allowed_fields.push(MultipartFormDataField::raw("image").size_limit(32 * 1024 * 1024).tolerance(1.2).fully_read(true).content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
 
     let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options) {
         Ok(multipart_form_data) => multipart_form_data,
         Err(err) => match err {
-            MultipartFormDataError::DataTooLargeError(_) => return RawResponse::from_vec("The file is too large.".bytes().collect(), "", Some(mime::TEXT_PLAIN_UTF_8)),
-            MultipartFormDataError::DataTypeError(_) => return RawResponse::from_vec("The file is not an image.".bytes().collect(), "", Some(mime::TEXT_PLAIN_UTF_8)),
+            MultipartFormDataError::DataTooLargeError(_) => return Err("The file is too large."),
+            MultipartFormDataError::DataTypeError(_) => return Err("The file is not an image."),
             _ => panic!("{:?}", err)
         }
     };
@@ -61,16 +49,22 @@ fn upload(content_type: &ContentType, data: Data) -> RawResponse {
                 let file_name = raw.file_name.unwrap_or("Image".to_string());
                 let data = raw.raw;
 
-                RawResponse::from_vec(data, file_name, content_type)
+                Ok(RawResponse::from_vec(data, Some(file_name), content_type))
             }
             RawField::Multiple(_) => unreachable!()
         },
-        None => RawResponse::from_vec("Please input a file.".bytes().collect(), "", Some(mime::TEXT_PLAIN_UTF_8))
+        None => Err("Please input a file.")
     }
 }
 
 fn main() {
     rocket::ignite()
+        .attach(StaticResponse::fairing(|resources| {
+            static_resources_initialize!(
+                resources,
+               "html-image-uploader", "examples/front-end/html/image-uploader.html",
+            );
+        }))
         .mount("/", routes![index])
         .mount("/", routes![upload])
         .launch();
