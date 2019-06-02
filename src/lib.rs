@@ -410,8 +410,6 @@ impl MultipartFormData {
                                     loop {
                                         let c = data.read(&mut buffer).map_err(|err| MultipartFormDataError::IOError(err))?;
 
-                                        println!("c = {}", c);
-
                                         if c == 0 {
                                             break;
                                         }
