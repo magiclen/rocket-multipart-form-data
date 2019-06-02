@@ -144,6 +144,20 @@ pub enum MultipartFormDataError {
     DataTypeError(Arc<str>),
 }
 
+impl From<io::Error> for MultipartFormDataError {
+    #[inline]
+    fn from(err: io::Error) -> MultipartFormDataError {
+        MultipartFormDataError::IOError(err)
+    }
+}
+
+impl From<string::FromUtf8Error> for MultipartFormDataError {
+    #[inline]
+    fn from(err: string::FromUtf8Error) -> MultipartFormDataError {
+        MultipartFormDataError::FromUtf8Error(err)
+    }
+}
+
 /// Options for parsing multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormDataOptions<'a> {
@@ -155,6 +169,7 @@ pub struct MultipartFormDataOptions<'a> {
 
 impl<'a> MultipartFormDataOptions<'a> {
     /// Create a default `MultipartFormDataOptions` instance.
+    #[inline]
     pub fn new() -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
             temporary_dir: env::temp_dir(),
@@ -199,20 +214,20 @@ impl MultipartFormData {
                     return Err(MultipartFormDataError::IOError(io::Error::new(io::ErrorKind::AlreadyExists, "the temporary path exists and it is not a directory")));
                 }
             } else {
-                fs::create_dir_all(path).map_err(|err| MultipartFormDataError::IOError(err))?;
+                fs::create_dir_all(path)?;
             }
         }
 
-        loop {
-            match multipart.read_entry().map_err(|err| MultipartFormDataError::IOError(err))? {
+        let mut output_err: Option<MultipartFormDataError> = None;
+
+        'outer: loop {
+            match multipart.read_entry()? {
                 Some(entry) => {
                     let field_name = entry.headers.name;
                     let content_type = entry.headers.content_type;
 
-                    'accept: loop {
+                    loop {
                         if let Ok(vi) = options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name)) {
-                            let mut buffer = [0u8; 4096];
-
                             {
                                 let field_ref = &options.allowed_fields[vi];
 
@@ -255,43 +270,16 @@ impl MultipartFormData {
                                     }
 
                                     if !mat {
-                                        let field = options.allowed_fields.remove(vi);
+                                        output_err = Some(MultipartFormDataError::DataTypeError(field_name));
 
-                                        let mut data = entry.data;
-
-                                        let rtn = Err(MultipartFormDataError::DataTypeError(field_name));
-
-                                        let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
-
-                                        let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
-                                            u64::max_value()
-                                        } else {
-                                            tolerant_size_limit as u64
-                                        };
-
-                                        let mut sum_c = 0;
-
-                                        loop {
-                                            if sum_c > tolerant_size_limit {
-                                                return rtn;
-                                            }
-
-                                            let c = match data.read(&mut buffer) {
-                                                Ok(c) => c,
-                                                Err(_) => return rtn
-                                            };
-
-                                            if c == 0 {
-                                                return rtn;
-                                            }
-
-                                            sum_c += c as u64;
-                                        }
+                                        break 'outer;
                                     }
 
                                     // The content type has been checked
                                 }
                             }
+
+                            let mut buffer = [0u8; 4096];
 
                             let field = options.allowed_fields.remove(vi);
 
@@ -325,15 +313,28 @@ impl MultipartFormData {
                                         p
                                     };
 
-                                    let mut file = File::create(&target_path).map_err(|err| MultipartFormDataError::IOError(err))?;
+                                    let mut file = match File::create(&target_path) {
+                                        Ok(f) => f,
+                                        Err(err) => {
+                                            output_err = Some(err.into());
+
+                                            break 'outer;
+                                        }
+                                    };
 
                                     let mut sum_c = 0u64;
 
                                     loop {
-                                        let c = data.read(&mut buffer).map_err(|err| {
-                                            try_delete(&target_path);
-                                            MultipartFormDataError::IOError(err)
-                                        })?;
+                                        let c = match data.read(&mut buffer) {
+                                            Ok(c) => c,
+                                            Err(err) => {
+                                                try_delete(&target_path);
+
+                                                output_err = Some(err.into());
+
+                                                break 'outer;
+                                            }
+                                        };
 
                                         if c == 0 {
                                             break;
@@ -344,38 +345,21 @@ impl MultipartFormData {
                                         if sum_c > field.size_limit {
                                             try_delete(&target_path);
 
-                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+                                            output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
 
-                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
-
-                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
-                                                u64::max_value()
-                                            } else {
-                                                tolerant_size_limit as u64
-                                            };
-
-                                            loop {
-                                                if sum_c > tolerant_size_limit {
-                                                    return rtn;
-                                                }
-
-                                                let c = match data.read(&mut buffer) {
-                                                    Ok(c) => c,
-                                                    Err(_) => return rtn
-                                                };
-
-                                                if c == 0 {
-                                                    return rtn;
-                                                }
-
-                                                sum_c += c as u64;
-                                            }
+                                            break 'outer;
                                         }
 
-                                        file.write(&buffer[..c]).map_err(|err| {
-                                            try_delete(&target_path);
-                                            MultipartFormDataError::IOError(err)
-                                        })?;
+                                        match file.write(&buffer[..c]) {
+                                            Ok(_) => (),
+                                            Err(err) => {
+                                                try_delete(&target_path);
+
+                                                output_err = Some(err.into());
+
+                                                break 'outer;
+                                            }
+                                        }
                                     }
 
                                     let file_name = entry.headers.filename;
@@ -408,41 +392,23 @@ impl MultipartFormData {
                                     let mut bytes = Vec::new();
 
                                     loop {
-                                        let c = data.read(&mut buffer).map_err(|err| MultipartFormDataError::IOError(err))?;
+                                        let c = match data.read(&mut buffer) {
+                                            Ok(c) => c,
+                                            Err(err) => {
+                                                output_err = Some(err.into());
+
+                                                break 'outer;
+                                            }
+                                        };
 
                                         if c == 0 {
                                             break;
                                         }
 
                                         if bytes.len() as u64 + c as u64 > field.size_limit {
-                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+                                            output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
 
-                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
-
-                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
-                                                u64::max_value()
-                                            } else {
-                                                tolerant_size_limit as u64
-                                            };
-
-                                            let mut sum_c = (bytes.len() + c) as u64;
-
-                                            loop {
-                                                if sum_c > tolerant_size_limit {
-                                                    return rtn;
-                                                }
-
-                                                let c = match data.read(&mut buffer) {
-                                                    Ok(c) => c,
-                                                    Err(_) => return rtn
-                                                };
-
-                                                if c == 0 {
-                                                    return rtn;
-                                                }
-
-                                                sum_c += c as u64;
-                                            }
+                                            break 'outer;
                                         }
 
                                         bytes.extend_from_slice(&buffer[..c]);
@@ -478,47 +444,36 @@ impl MultipartFormData {
                                     let mut text_buffer = Vec::new();
 
                                     loop {
-                                        let c = data.read(&mut buffer).map_err(|err| MultipartFormDataError::IOError(err))?;
+                                        let c = match data.read(&mut buffer) {
+                                            Ok(c) => c,
+                                            Err(err) => {
+                                                output_err = Some(err.into());
+
+                                                break 'outer;
+                                            }
+                                        };
 
                                         if c == 0 {
                                             break;
                                         }
 
                                         if text_buffer.len() as u64 + c as u64 > field.size_limit {
-                                            let rtn = Err(MultipartFormDataError::DataTooLargeError(field_name));
+                                            output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
 
-                                            let tolerant_size_limit = field.size_limit as f64 * field.tolerance;
-
-                                            let tolerant_size_limit = if tolerant_size_limit > u64::max_value() as f64 {
-                                                u64::max_value()
-                                            } else {
-                                                tolerant_size_limit as u64
-                                            };
-
-                                            let mut sum_c = (text_buffer.len() + c) as u64;
-
-                                            loop {
-                                                if sum_c > tolerant_size_limit {
-                                                    return rtn;
-                                                }
-
-                                                let c = match data.read(&mut buffer) {
-                                                    Ok(c) => c,
-                                                    Err(_) => return rtn
-                                                };
-
-                                                if c == 0 {
-                                                    return rtn;
-                                                }
-
-                                                sum_c += c as u64;
-                                            }
+                                            break 'outer;
                                         }
 
                                         text_buffer.extend_from_slice(&buffer[..c]);
                                     }
 
-                                    let text = String::from_utf8(text_buffer).map_err(|err| MultipartFormDataError::FromUtf8Error(err))?;
+                                    let text = match String::from_utf8(text_buffer) {
+                                        Ok(s) => s,
+                                        Err(err) => {
+                                            output_err = Some(err.into());
+
+                                            break 'outer;
+                                        }
+                                    };
 
                                     let file_name = entry.headers.filename;
 
@@ -548,9 +503,9 @@ impl MultipartFormData {
                                 }
                             }
 
-                            break 'accept;
+                            break;
                         } else {
-                            break 'accept;
+                            break;
                         }
                     }
                 }
@@ -560,15 +515,39 @@ impl MultipartFormData {
             }
         }
 
-        Ok(MultipartFormData {
-            files,
-            raw,
-            texts,
-        })
+        if let Some(err) = output_err {
+            for (_, field) in files {
+                match field {
+                    FileField::Single(f) => {
+                        try_delete(&f.path);
+                    }
+                    FileField::Multiple(vf) => {
+                        for f in vf {
+                            try_delete(&f.path);
+                        }
+                    }
+                }
+            }
+
+            loop {
+                if let None = multipart.read_entry()? {
+                    break;
+                }
+            }
+
+            Err(err)
+        } else {
+            Ok(MultipartFormData {
+                files,
+                raw,
+                texts,
+            })
+        }
     }
 }
 
 impl Drop for MultipartFormData {
+    #[inline]
     fn drop(&mut self) {
         let files = &self.files;
 
@@ -587,6 +566,7 @@ impl Drop for MultipartFormData {
     }
 }
 
+#[inline]
 fn try_delete<P: AsRef<Path>>(path: P) {
     if let Err(_) = fs::remove_file(path.as_ref()) {}
 }

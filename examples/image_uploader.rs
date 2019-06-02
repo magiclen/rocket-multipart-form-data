@@ -29,7 +29,7 @@ fn index(etag_if_none_match: EtagIfNoneMatch) -> StaticResponse {
 #[post("/upload", data = "<data>")]
 fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
     let mut options = MultipartFormDataOptions::new();
-    options.allowed_fields.push(MultipartFormDataField::raw("image").size_limit(32 * 1024 * 1024).tolerance(1.2).fully_read(true).content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
+    options.allowed_fields.push(MultipartFormDataField::raw("image").size_limit(32 * 1024 * 1024).content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
 
     let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options) {
         Ok(multipart_form_data) => multipart_form_data,

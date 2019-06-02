@@ -23,7 +23,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 {
     let mut options = MultipartFormDataOptions::new();
     options.allowed_fields.push(MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
-    options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096).tolerance(1.2).fully_read(true));
+    options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096));
     options.allowed_fields.push(MultipartFormDataField::text("name"));
     options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
     options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
