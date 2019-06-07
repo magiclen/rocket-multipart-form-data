@@ -16,7 +16,7 @@ travis-ci = { repository = "magiclen/rocket-multipart-form-data", branch = "mast
 [dependencies]
 rocket = "0.4"
 mime = "0.3.12"
-multipart = "0.16.1"
+multipart = {version = "0.16.1", default-features = false, features = ["server"]}
 chrono = "0.4.6"
 
 [dev-dependencies]
