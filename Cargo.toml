@@ -10,8 +10,9 @@ description= "This crate provides a multipart parser for the Rocket framework."
 readme = "README.md"
 license = "MIT"
 
-[badges]
-travis-ci = { repository = "magiclen/rocket-multipart-form-data", branch = "master" }
+[badges.travis-ci]
+repository = "magiclen/rocket-multipart-form-data"
+branch = "master"
 
 [dependencies]
 rocket = "0.4"
