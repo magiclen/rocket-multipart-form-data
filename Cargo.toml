@@ -1,6 +1,7 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.7.0"
+version = "0.7.1"
+edition = "2018"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/rocket-multipart-form-data"
 homepage = "https://magiclen.org/rocket-multipart-form-data"
@@ -15,7 +16,7 @@ repository = "magiclen/rocket-multipart-form-data"
 branch = "master"
 
 [dependencies]
-rocket = "0.4"
+rocket = "0.4.2"
 mime = "0.3.12"
 multipart = {version = "0.16.1", default-features = false, features = ["server"]}
 chrono = "0.4.6"

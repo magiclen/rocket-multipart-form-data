@@ -1,4 +1,4 @@
-use ::MultipartFormDataType;
+use crate::MultipartFormDataType;
 
 use std::cmp::Ordering;
 use std::path::PathBuf;
@@ -74,10 +74,9 @@ impl<'a> MultipartFormDataField<'a> {
     pub fn content_type(mut self, content_type: Option<Mime>) -> MultipartFormDataField<'a> {
         match content_type {
             Some(content_type) => {
-                match self.content_type {
-                    Some(mut v) => {
+                match self.content_type.as_mut() {
+                    Some(v) => {
                         v.push(content_type);
-                        self.content_type = Some(v);
                     }
                     None => {
                         self.content_type = Some(vec![content_type]);
@@ -95,10 +94,9 @@ impl<'a> MultipartFormDataField<'a> {
         match content_type {
             Some(content_type) => {
                 let content_type = Mime::from_str(content_type.as_ref())?;
-                match self.content_type {
-                    Some(mut v) => {
+                match self.content_type.as_mut() {
+                    Some(v) => {
                         v.push(content_type);
-                        self.content_type = Some(v);
                     }
                     None => {
                         self.content_type = Some(vec![content_type]);
