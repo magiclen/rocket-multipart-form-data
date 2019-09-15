@@ -6,7 +6,7 @@ use std::str::FromStr;
 
 use mime::Mime;
 
-const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1 * 1024 * 1024;
+const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
 
 /// The guarder for fields.
