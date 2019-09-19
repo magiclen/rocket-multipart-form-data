@@ -104,33 +104,36 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 Also see `examples`.
 */
 
-pub extern crate mime;
-extern crate rocket;
-extern crate multipart;
 extern crate chrono;
+pub extern crate mime;
+extern crate multipart;
+extern crate rocket;
 
-mod multipart_form_data_type;
 mod multipart_form_data_field;
+mod multipart_form_data_type;
 
-pub use multipart_form_data_type::MultipartFormDataType;
 pub use multipart_form_data_field::*;
+pub use multipart_form_data_type::MultipartFormDataType;
 
 use std::collections::HashMap;
-use std::io::{self, Read, Write};
-use std::path::{PathBuf, Path};
-use std::sync::Arc;
 use std::env;
-use std::string;
 use std::fs::{self, File};
+use std::io::{self, Read, Write};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use std::string;
+use std::sync::Arc;
 
 use chrono::prelude::*;
 
 use mime::Mime;
 
-use rocket::Data;
+use rocket::http::hyper::{
+    self,
+    mime::{SubLevel, TopLevel},
+};
 use rocket::http::ContentType;
-use rocket::http::hyper::{self, mime::{TopLevel, SubLevel}};
+use rocket::Data;
 
 use multipart::server::Multipart;
 
@@ -178,6 +181,13 @@ impl<'a> MultipartFormDataOptions<'a> {
     }
 }
 
+impl<'a> Default for MultipartFormDataOptions<'a> {
+    #[inline]
+    fn default() -> Self {
+        MultipartFormDataOptions::new()
+    }
+}
+
 /// Parsed multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormData {
@@ -188,14 +198,19 @@ pub struct MultipartFormData {
 
 impl MultipartFormData {
     /// Parse multipart/form-data from the HTTP body.
-    pub fn parse(content_type: &ContentType, data: Data, mut options: MultipartFormDataOptions) -> Result<MultipartFormData, MultipartFormDataError> {
+    #[allow(clippy::cognitive_complexity)]
+    pub fn parse(
+        content_type: &ContentType,
+        data: Data,
+        mut options: MultipartFormDataOptions,
+    ) -> Result<MultipartFormData, MultipartFormDataError> {
         if !content_type.is_form_data() {
             return Err(MultipartFormDataError::NotFormDataError);
         }
 
         let (_, boundary) = match content_type.params().find(|&(k, _)| k == "boundary") {
             Some(s) => s,
-            None => return Err(MultipartFormDataError::BoundaryNotFoundError)
+            None => return Err(MultipartFormDataError::BoundaryNotFoundError),
         };
 
         options.allowed_fields.sort();
@@ -211,7 +226,10 @@ impl MultipartFormData {
 
             if path.exists() {
                 if !path.is_dir() {
-                    return Err(MultipartFormDataError::IOError(io::Error::new(io::ErrorKind::AlreadyExists, "the temporary path exists and it is not a directory")));
+                    return Err(MultipartFormDataError::IOError(io::Error::new(
+                        io::ErrorKind::AlreadyExists,
+                        "the temporary path exists and it is not a directory",
+                    )));
                 }
             } else {
                 fs::create_dir_all(path)?;
@@ -224,11 +242,14 @@ impl MultipartFormData {
             let field_name = entry.headers.name;
             let content_type = entry.headers.content_type;
 
-            while let Ok(vi) = options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name)) {
+            if let Ok(vi) =
+                options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name))
+            {
                 {
                     let field_ref = &options.allowed_fields[vi];
 
-                    if let Some(content_type_ref) = &field_ref.content_type { // Whether to check content type
+                    if let Some(content_type_ref) = &field_ref.content_type {
+                        // Whether to check content type
                         let mut mat = false; // Is the content type matching?
 
                         let (top, sub) = match &content_type {
@@ -236,11 +257,12 @@ impl MultipartFormData {
                                 let hyper::mime::Mime(top, sub, _) = content_type;
                                 (Some(top), Some(sub))
                             }
-                            None => (None, None)
+                            None => (None, None),
                         };
 
                         for content_type_ref in content_type_ref {
-                            let mime = hyper::mime::Mime::from_str(content_type_ref.as_ref()).unwrap();
+                            let mime =
+                                hyper::mime::Mime::from_str(content_type_ref.as_ref()).unwrap();
                             let hyper::mime::Mime(top_ref, sub_ref, _) = mime;
                             if top_ref.ne(&TopLevel::Star) {
                                 if let Some(top) = top {
@@ -297,7 +319,10 @@ impl MultipartFormData {
                                 p = if i == 0 {
                                     Path::join(&options.temporary_dir, &target_file_name)
                                 } else {
-                                    Path::join(&options.temporary_dir, format!("{}-{}", &target_file_name, i))
+                                    Path::join(
+                                        &options.temporary_dir,
+                                        format!("{}-{}", &target_file_name, i),
+                                    )
                                 };
 
                                 if !p.exists() {
@@ -342,7 +367,8 @@ impl MultipartFormData {
                             if sum_c > field.size_limit {
                                 try_delete(&target_path);
 
-                                output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
+                                output_err =
+                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
 
                                 break 'outer;
                             }
@@ -362,7 +388,8 @@ impl MultipartFormData {
                         let file_name = entry.headers.filename;
 
                         let f = SingleFileField {
-                            content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                            content_type: content_type
+                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                             file_name,
                             path: target_path,
                         };
@@ -403,7 +430,8 @@ impl MultipartFormData {
                             }
 
                             if bytes.len() as u64 + c as u64 > field.size_limit {
-                                output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
+                                output_err =
+                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
 
                                 break 'outer;
                             }
@@ -414,7 +442,8 @@ impl MultipartFormData {
                         let file_name = entry.headers.filename;
 
                         let f = SingleRawField {
-                            content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                            content_type: content_type
+                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                             file_name,
                             raw: bytes,
                         };
@@ -455,7 +484,8 @@ impl MultipartFormData {
                             }
 
                             if text_buffer.len() as u64 + c as u64 > field.size_limit {
-                                output_err = Some(MultipartFormDataError::DataTooLargeError(field_name));
+                                output_err =
+                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
 
                                 break 'outer;
                             }
@@ -475,7 +505,8 @@ impl MultipartFormData {
                         let file_name = entry.headers.filename;
 
                         let f = SingleTextField {
-                            content_type: content_type.map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                            content_type: content_type
+                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
                             file_name,
                             text,
                         };
@@ -499,8 +530,6 @@ impl MultipartFormData {
                         }
                     }
                 }
-
-                break;
             }
         }
 

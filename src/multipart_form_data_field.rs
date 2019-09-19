@@ -83,14 +83,17 @@ impl<'a> MultipartFormDataField<'a> {
                     }
                 }
             }
-            None => self.content_type = None
+            None => self.content_type = None,
         }
         self
     }
 
     /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
     #[inline]
-    pub fn content_type_by_string<S: AsRef<str>>(mut self, content_type: Option<S>) -> Result<MultipartFormDataField<'a>, mime::FromStrError> {
+    pub fn content_type_by_string<S: AsRef<str>>(
+        mut self,
+        content_type: Option<S>,
+    ) -> Result<MultipartFormDataField<'a>, mime::FromStrError> {
         match content_type {
             Some(content_type) => {
                 let content_type = Mime::from_str(content_type.as_ref())?;
@@ -103,7 +106,7 @@ impl<'a> MultipartFormDataField<'a> {
                     }
                 }
             }
-            None => self.content_type = None
+            None => self.content_type = None,
         }
         Ok(self)
     }
