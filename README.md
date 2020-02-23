@@ -16,7 +16,7 @@ extern crate rocket_multipart_form_data;
 use rocket::Data;
 use rocket::http::ContentType;
 
-use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, FileField, TextField, RawField};
+use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, Repetition, FileField, TextField, RawField};
 
 #[post("/", data = "<data>")]
 fn index(content_type: &ContentType, data: Data) -> &'static str
@@ -25,9 +25,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
     options.allowed_fields.push(MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
     options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096));
     options.allowed_fields.push(MultipartFormDataField::text("name"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
+    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3").repetition(Repetition::fixed(3)));
 
     let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
 

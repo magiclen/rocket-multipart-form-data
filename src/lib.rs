@@ -14,7 +14,7 @@ extern crate rocket_multipart_form_data;
 use rocket::Data;
 use rocket::http::ContentType;
 
-use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, FileField, TextField, RawField};
+use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, Repetition, FileField, TextField, RawField};
 
 #[post("/", data = "<data>")]
 fn index(content_type: &ContentType, data: Data) -> &'static str
@@ -23,9 +23,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
     options.allowed_fields.push(MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap());
     options.allowed_fields.push(MultipartFormDataField::raw("fingerprint").size_limit(4096));
     options.allowed_fields.push(MultipartFormDataField::text("name"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
-    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3"));
+    options.allowed_fields.push(MultipartFormDataField::text("array_max_length_3").repetition(Repetition::fixed(3)));
 
     let multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
 
@@ -248,8 +246,8 @@ impl MultipartFormData {
                 {
                     let field_ref = &options.allowed_fields[vi];
 
+                    // Whether to check content type
                     if let Some(content_type_ref) = &field_ref.content_type {
-                        // Whether to check content type
                         let mut mat = false; // Is the content type matching?
 
                         let (top, sub) = match &content_type {
@@ -298,237 +296,245 @@ impl MultipartFormData {
                     }
                 }
 
-                let mut buffer = [0u8; 4096];
+                let drop_field = {
+                    let mut buffer = [0u8; 4096];
 
-                let field = options.allowed_fields.remove(vi);
+                    let field = unsafe { options.allowed_fields.get_unchecked_mut(vi) };
 
-                let mut data = entry.data;
+                    let mut data = entry.data;
 
-                match field.typ {
-                    MultipartFormDataType::File => {
-                        let now = Utc::now();
+                    match field.typ {
+                        MultipartFormDataType::File => {
+                            let now = Utc::now();
 
-                        let target_file_name = format!("rs-{}", now.timestamp_nanos());
+                            let target_file_name = format!("rs-{}", now.timestamp_nanos());
 
-                        let target_path = {
-                            let mut i = 0usize;
+                            let target_path = {
+                                let mut i = 0usize;
 
-                            let mut p;
+                                let mut p;
+
+                                loop {
+                                    p = if i == 0 {
+                                        Path::join(&options.temporary_dir, &target_file_name)
+                                    } else {
+                                        Path::join(
+                                            &options.temporary_dir,
+                                            format!("{}-{}", &target_file_name, i),
+                                        )
+                                    };
+
+                                    if !p.exists() {
+                                        break;
+                                    }
+
+                                    i += 1;
+                                }
+
+                                p
+                            };
+
+                            let mut file = match File::create(&target_path) {
+                                Ok(f) => f,
+                                Err(err) => {
+                                    output_err = Some(err.into());
+
+                                    break 'outer;
+                                }
+                            };
+
+                            let mut sum_c = 0u64;
 
                             loop {
-                                p = if i == 0 {
-                                    Path::join(&options.temporary_dir, &target_file_name)
-                                } else {
-                                    Path::join(
-                                        &options.temporary_dir,
-                                        format!("{}-{}", &target_file_name, i),
-                                    )
+                                let c = match data.read(&mut buffer) {
+                                    Ok(c) => c,
+                                    Err(err) => {
+                                        try_delete(&target_path);
+
+                                        output_err = Some(err.into());
+
+                                        break 'outer;
+                                    }
                                 };
 
-                                if !p.exists() {
+                                if c == 0 {
                                     break;
                                 }
 
-                                i += 1;
-                            }
+                                sum_c += c as u64;
 
-                            p
-                        };
-
-                        let mut file = match File::create(&target_path) {
-                            Ok(f) => f,
-                            Err(err) => {
-                                output_err = Some(err.into());
-
-                                break 'outer;
-                            }
-                        };
-
-                        let mut sum_c = 0u64;
-
-                        loop {
-                            let c = match data.read(&mut buffer) {
-                                Ok(c) => c,
-                                Err(err) => {
+                                if sum_c > field.size_limit {
                                     try_delete(&target_path);
 
+                                    output_err =
+                                        Some(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                    break 'outer;
+                                }
+
+                                match file.write(&buffer[..c]) {
+                                    Ok(_) => (),
+                                    Err(err) => {
+                                        try_delete(&target_path);
+
+                                        output_err = Some(err.into());
+
+                                        break 'outer;
+                                    }
+                                }
+                            }
+
+                            let file_name = entry.headers.filename;
+
+                            let f = SingleFileField {
+                                content_type: content_type
+                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                file_name,
+                                path: target_path,
+                            };
+
+                            match files.remove(&field_name) {
+                                Some(field) => {
+                                    match field {
+                                        FileField::Single(t) => {
+                                            let v = vec![t, f];
+                                            files.insert(field_name, FileField::Multiple(v));
+                                        }
+                                        FileField::Multiple(mut v) => {
+                                            v.push(f);
+                                            files.insert(field_name, FileField::Multiple(v));
+                                        }
+                                    }
+                                }
+                                None => {
+                                    files.insert(field_name, FileField::Single(f));
+                                }
+                            }
+                        }
+                        MultipartFormDataType::Raw => {
+                            let mut bytes = Vec::new();
+
+                            loop {
+                                let c = match data.read(&mut buffer) {
+                                    Ok(c) => c,
+                                    Err(err) => {
+                                        output_err = Some(err.into());
+
+                                        break 'outer;
+                                    }
+                                };
+
+                                if c == 0 {
+                                    break;
+                                }
+
+                                if bytes.len() as u64 + c as u64 > field.size_limit {
+                                    output_err =
+                                        Some(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                    break 'outer;
+                                }
+
+                                bytes.extend_from_slice(&buffer[..c]);
+                            }
+
+                            let file_name = entry.headers.filename;
+
+                            let f = SingleRawField {
+                                content_type: content_type
+                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                file_name,
+                                raw: bytes,
+                            };
+
+                            match raw.remove(&field_name) {
+                                Some(field) => {
+                                    match field {
+                                        RawField::Single(t) => {
+                                            let v = vec![t, f];
+                                            raw.insert(field_name, RawField::Multiple(v));
+                                        }
+                                        RawField::Multiple(mut v) => {
+                                            v.push(f);
+                                            raw.insert(field_name, RawField::Multiple(v));
+                                        }
+                                    }
+                                }
+                                None => {
+                                    raw.insert(field_name, RawField::Single(f));
+                                }
+                            }
+                        }
+                        MultipartFormDataType::Text => {
+                            let mut text_buffer = Vec::new();
+
+                            loop {
+                                let c = match data.read(&mut buffer) {
+                                    Ok(c) => c,
+                                    Err(err) => {
+                                        output_err = Some(err.into());
+
+                                        break 'outer;
+                                    }
+                                };
+
+                                if c == 0 {
+                                    break;
+                                }
+
+                                if text_buffer.len() as u64 + c as u64 > field.size_limit {
+                                    output_err =
+                                        Some(MultipartFormDataError::DataTooLargeError(field_name));
+
+                                    break 'outer;
+                                }
+
+                                text_buffer.extend_from_slice(&buffer[..c]);
+                            }
+
+                            let text = match String::from_utf8(text_buffer) {
+                                Ok(s) => s,
+                                Err(err) => {
                                     output_err = Some(err.into());
 
                                     break 'outer;
                                 }
                             };
 
-                            if c == 0 {
-                                break;
-                            }
+                            let file_name = entry.headers.filename;
 
-                            sum_c += c as u64;
-
-                            if sum_c > field.size_limit {
-                                try_delete(&target_path);
-
-                                output_err =
-                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
-
-                                break 'outer;
-                            }
-
-                            match file.write(&buffer[..c]) {
-                                Ok(_) => (),
-                                Err(err) => {
-                                    try_delete(&target_path);
-
-                                    output_err = Some(err.into());
-
-                                    break 'outer;
-                                }
-                            }
-                        }
-
-                        let file_name = entry.headers.filename;
-
-                        let f = SingleFileField {
-                            content_type: content_type
-                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
-                            file_name,
-                            path: target_path,
-                        };
-
-                        match files.remove(&field_name) {
-                            Some(field) => {
-                                match field {
-                                    FileField::Single(t) => {
-                                        let v = vec![t, f];
-                                        files.insert(field_name, FileField::Multiple(v));
-                                    }
-                                    FileField::Multiple(mut v) => {
-                                        v.push(f);
-                                        files.insert(field_name, FileField::Multiple(v));
-                                    }
-                                }
-                            }
-                            None => {
-                                files.insert(field_name, FileField::Single(f));
-                            }
-                        }
-                    }
-                    MultipartFormDataType::Raw => {
-                        let mut bytes = Vec::new();
-
-                        loop {
-                            let c = match data.read(&mut buffer) {
-                                Ok(c) => c,
-                                Err(err) => {
-                                    output_err = Some(err.into());
-
-                                    break 'outer;
-                                }
+                            let f = SingleTextField {
+                                content_type: content_type
+                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                file_name,
+                                text,
                             };
 
-                            if c == 0 {
-                                break;
-                            }
-
-                            if bytes.len() as u64 + c as u64 > field.size_limit {
-                                output_err =
-                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
-
-                                break 'outer;
-                            }
-
-                            bytes.extend_from_slice(&buffer[..c]);
-                        }
-
-                        let file_name = entry.headers.filename;
-
-                        let f = SingleRawField {
-                            content_type: content_type
-                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
-                            file_name,
-                            raw: bytes,
-                        };
-
-                        match raw.remove(&field_name) {
-                            Some(field) => {
-                                match field {
-                                    RawField::Single(t) => {
-                                        let v = vec![t, f];
-                                        raw.insert(field_name, RawField::Multiple(v));
-                                    }
-                                    RawField::Multiple(mut v) => {
-                                        v.push(f);
-                                        raw.insert(field_name, RawField::Multiple(v));
+                            match texts.remove(&field_name) {
+                                Some(field) => {
+                                    match field {
+                                        TextField::Single(t) => {
+                                            let v = vec![t, f];
+                                            texts.insert(field_name, TextField::Multiple(v));
+                                        }
+                                        TextField::Multiple(mut v) => {
+                                            v.push(f);
+                                            texts.insert(field_name, TextField::Multiple(v));
+                                        }
                                     }
                                 }
-                            }
-                            None => {
-                                raw.insert(field_name, RawField::Single(f));
+                                None => {
+                                    texts.insert(field_name, TextField::Single(f));
+                                }
                             }
                         }
                     }
-                    MultipartFormDataType::Text => {
-                        let mut text_buffer = Vec::new();
 
-                        loop {
-                            let c = match data.read(&mut buffer) {
-                                Ok(c) => c,
-                                Err(err) => {
-                                    output_err = Some(err.into());
+                    field.repetition.decrease_check_is_over()
+                };
 
-                                    break 'outer;
-                                }
-                            };
-
-                            if c == 0 {
-                                break;
-                            }
-
-                            if text_buffer.len() as u64 + c as u64 > field.size_limit {
-                                output_err =
-                                    Some(MultipartFormDataError::DataTooLargeError(field_name));
-
-                                break 'outer;
-                            }
-
-                            text_buffer.extend_from_slice(&buffer[..c]);
-                        }
-
-                        let text = match String::from_utf8(text_buffer) {
-                            Ok(s) => s,
-                            Err(err) => {
-                                output_err = Some(err.into());
-
-                                break 'outer;
-                            }
-                        };
-
-                        let file_name = entry.headers.filename;
-
-                        let f = SingleTextField {
-                            content_type: content_type
-                                .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
-                            file_name,
-                            text,
-                        };
-
-                        match texts.remove(&field_name) {
-                            Some(field) => {
-                                match field {
-                                    TextField::Single(t) => {
-                                        let v = vec![t, f];
-                                        texts.insert(field_name, TextField::Multiple(v));
-                                    }
-                                    TextField::Multiple(mut v) => {
-                                        v.push(f);
-                                        texts.insert(field_name, TextField::Multiple(v));
-                                    }
-                                }
-                            }
-                            None => {
-                                texts.insert(field_name, TextField::Single(f));
-                            }
-                        }
-                    }
+                if drop_field {
+                    options.allowed_fields.remove(vi);
                 }
             }
         }
