@@ -42,7 +42,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
                 let _content_type = &file.content_type;
                 let _file_name = &file.file_name;
                 let _path = &file.path;
-                // You can now deal with the uploaded file. The file will be delete automatically when the MultipartFormData instance is dropped. If you want to handle that file by your own, instead of killing it, just remove it out from the MultipartFormData instance.
+                // You can now deal with the uploaded file. The file will be deleted automatically when the MultipartFormData instance is dropped. If you want to handle that file by your own, instead of killing it, just remove it out from the MultipartFormData instance.
             }
             FileField::Multiple(_files) => {
                 // Because we only put one "photo" field to the allowed_fields, this arm will not be matched.
