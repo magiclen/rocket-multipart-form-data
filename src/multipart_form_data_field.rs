@@ -19,7 +19,7 @@ pub struct MultipartFormDataField<'a> {
     /// The size limit for this field.
     pub size_limit: u64,
     /// To filter the content types. It supports stars.
-    pub content_type: Option<(Vec<Mime>)>,
+    pub content_type: Option<Vec<Mime>>,
 }
 
 impl<'a> MultipartFormDataField<'a> {
