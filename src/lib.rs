@@ -115,6 +115,8 @@ pub use multipart_form_data_type::MultipartFormDataType;
 
 use std::collections::HashMap;
 use std::env;
+use std::error::Error;
+use std::fmt::{Display, Error as FmtError, Formatter};
 use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -144,6 +146,32 @@ pub enum MultipartFormDataError {
     DataTooLargeError(Arc<str>),
     DataTypeError(Arc<str>),
 }
+
+impl Display for MultipartFormDataError {
+    #[inline]
+    fn fmt(&self, f: &mut Formatter) -> Result<(), FmtError> {
+        match self {
+            MultipartFormDataError::NotFormDataError => {
+                f.write_str("The content type is not `multipart/form-data`.")
+            }
+            MultipartFormDataError::BoundaryNotFoundError => {
+                f.write_str(
+                    "The boundary cannot be found. Maybe the multipart form data is incorrect.",
+                )
+            }
+            MultipartFormDataError::IOError(err) => Display::fmt(err, f),
+            MultipartFormDataError::FromUtf8Error(err) => Display::fmt(err, f),
+            MultipartFormDataError::DataTooLargeError(field) => {
+                f.write_fmt(format_args!("The data of field `{}` is too large.", field))
+            }
+            MultipartFormDataError::DataTypeError(field) => {
+                f.write_fmt(format_args!("The data type of field `{}` is incorrect.", field))
+            }
+        }
+    }
+}
+
+impl Error for MultipartFormDataError {}
 
 impl From<io::Error> for MultipartFormDataError {
     #[inline]
