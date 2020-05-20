@@ -18,7 +18,6 @@ use rocket_include_static_resources::{EtagIfNoneMatch, StaticResponse};
 use rocket_multipart_form_data::mime;
 use rocket_multipart_form_data::{
     MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
-    RawField,
 };
 
 use rocket_raw_response::RawResponse;
@@ -30,23 +29,22 @@ fn index(etag_if_none_match: EtagIfNoneMatch) -> StaticResponse {
 
 #[post("/upload", data = "<data>")]
 fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
-    let mut options = MultipartFormDataOptions::new();
-    options.allowed_fields.push(
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
         MultipartFormDataField::raw("image")
             .size_limit(32 * 1024 * 1024)
             .content_type_by_string(Some(mime::IMAGE_STAR))
             .unwrap(),
-    );
+    ]);
 
     let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options) {
         Ok(multipart_form_data) => multipart_form_data,
         Err(err) => {
             match err {
                 MultipartFormDataError::DataTooLargeError(_) => {
-                    return Err("The file is too large.")
+                    return Err("The file is too large.");
                 }
                 MultipartFormDataError::DataTypeError(_) => {
-                    return Err("The file is not an image.")
+                    return Err("The file is not an image.");
                 }
                 _ => panic!("{:?}", err),
             }
@@ -56,17 +54,14 @@ fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'stati
     let image = multipart_form_data.raw.remove("image");
 
     match image {
-        Some(image) => {
-            match image {
-                RawField::Single(raw) => {
-                    let content_type = raw.content_type;
-                    let file_name = raw.file_name.unwrap_or("Image".to_string());
-                    let data = raw.raw;
+        Some(mut image) => {
+            let raw = image.remove(0);
 
-                    Ok(RawResponse::from_vec(data, Some(file_name), content_type))
-                }
-                RawField::Multiple(_) => unreachable!(),
-            }
+            let content_type = raw.content_type;
+            let file_name = raw.file_name.unwrap_or("Image".to_string());
+            let data = raw.raw;
+
+            Ok(RawResponse::from_vec(data, Some(file_name), content_type))
         }
         None => Err("Please input a file."),
     }

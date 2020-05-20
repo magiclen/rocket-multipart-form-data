@@ -1,25 +1,28 @@
-use crate::MultipartFormDataType;
-
-use std::cmp::Ordering;
-use std::path::PathBuf;
 use std::str::FromStr;
 
-use mime::Mime;
+use crate::mime::Mime;
+
+use crate::{MultipartFormDataType, Repetition};
 
 const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
 
 /// The guarder for fields.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Educe)]
+#[educe(PartialEq, Eq, PartialOrd, Ord)]
 pub struct MultipartFormDataField<'a> {
+    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// The type of this field.
     pub typ: MultipartFormDataType,
     /// The name of this field.
     pub field_name: &'a str,
+    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// The size limit for this field.
     pub size_limit: u64,
+    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// To filter the content types. It supports stars.
     pub content_type: Option<Vec<Mime>>,
+    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// To define this `MultipartFormDataField` instance can be used how many times.
     pub repetition: Repetition,
 }
@@ -27,10 +30,10 @@ pub struct MultipartFormDataField<'a> {
 impl<'a> MultipartFormDataField<'a> {
     /// Create a text field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn text(field_name: &'a str) -> MultipartFormDataField<'a> {
+    pub fn text<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
             typ: MultipartFormDataType::Text,
-            field_name,
+            field_name: field_name.as_ref(),
             size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
             repetition: Repetition::default(),
@@ -39,16 +42,16 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Create a raw field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn bytes(field_name: &'a str) -> MultipartFormDataField<'a> {
-        Self::raw(field_name)
+    pub fn bytes<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
+        Self::raw(field_name.as_ref())
     }
 
     /// Create a raw field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn raw(field_name: &'a str) -> MultipartFormDataField<'a> {
+    pub fn raw<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
             typ: MultipartFormDataType::Raw,
-            field_name,
+            field_name: field_name.as_ref(),
             size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
             repetition: Repetition::default(),
@@ -57,10 +60,10 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Create a file field, the default size_limit is 8 MiB.
     #[inline]
-    pub fn file(field_name: &'a str) -> MultipartFormDataField<'a> {
+    pub fn file<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
             typ: MultipartFormDataType::File,
-            field_name,
+            field_name: field_name.as_ref(),
             size_limit: DEFAULT_FILE_DATA_LIMIT,
             content_type: None,
             repetition: Repetition::default(),
@@ -121,147 +124,5 @@ impl<'a> MultipartFormDataField<'a> {
     pub fn repetition(mut self, repetition: Repetition) -> MultipartFormDataField<'a> {
         self.repetition = repetition;
         self
-    }
-}
-
-impl<'a> PartialEq for MultipartFormDataField<'a> {
-    #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.field_name.eq(other.field_name)
-    }
-}
-
-impl<'a> Eq for MultipartFormDataField<'a> {}
-
-impl<'a> PartialOrd for MultipartFormDataField<'a> {
-    #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.field_name.partial_cmp(other.field_name)
-    }
-}
-
-impl<'a> Ord for MultipartFormDataField<'a> {
-    #[inline]
-    fn cmp(&self, other: &Self) -> Ordering {
-        self.field_name.cmp(other.field_name)
-    }
-}
-
-#[derive(Debug)]
-pub struct SingleFileField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub path: PathBuf,
-}
-
-#[derive(Debug)]
-pub enum FileField {
-    Single(SingleFileField),
-    Multiple(Vec<SingleFileField>),
-}
-
-#[derive(Debug)]
-pub struct SingleRawField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub raw: Vec<u8>,
-}
-
-#[derive(Debug)]
-pub enum RawField {
-    Single(SingleRawField),
-    Multiple(Vec<SingleRawField>),
-}
-
-#[derive(Debug)]
-pub struct SingleTextField {
-    pub content_type: Option<Mime>,
-    pub file_name: Option<String>,
-    pub text: String,
-}
-
-#[derive(Debug)]
-pub enum TextField {
-    Single(SingleTextField),
-    Multiple(Vec<SingleTextField>),
-}
-
-#[derive(Debug, Clone, Copy)]
-enum RepetitionCounter {
-    Fixed(u32),
-    Infinite,
-}
-
-impl RepetitionCounter {
-    #[inline]
-    pub(crate) fn decrease_check_is_over(&mut self) -> bool {
-        match self {
-            RepetitionCounter::Fixed(n) => {
-                debug_assert!(*n > 0);
-
-                *n -= 1;
-
-                *n == 0
-            }
-            RepetitionCounter::Infinite => false,
-        }
-    }
-}
-
-impl Default for RepetitionCounter {
-    #[inline]
-    fn default() -> Self {
-        RepetitionCounter::Fixed(1)
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-/// It can be used to define a `MultipartFormDataField` instance can be used how many times.
-pub struct Repetition {
-    counter: RepetitionCounter,
-}
-
-impl Repetition {
-    #[inline]
-    /// Create a `Repetition` instance for only one time.
-    pub fn new() -> Repetition {
-        Repetition::fixed(1)
-    }
-
-    #[inline]
-    /// Create a `Repetition` instance for any fixed times.
-    pub fn fixed(count: u32) -> Repetition {
-        if count == 0 {
-            eprintln!("The count of fixed repetition for a `MultipartFormDataField` instance should be bigger than 0. Use 1 instead.");
-
-            Repetition {
-                counter: RepetitionCounter::Fixed(1),
-            }
-        } else {
-            Repetition {
-                counter: RepetitionCounter::Fixed(count),
-            }
-        }
-    }
-
-    #[inline]
-    /// Create a `Repetition` instance for infinite times.
-    pub fn infinite() -> Repetition {
-        Repetition {
-            counter: RepetitionCounter::Infinite,
-        }
-    }
-
-    #[inline]
-    pub(crate) fn decrease_check_is_over(&mut self) -> bool {
-        self.counter.decrease_check_is_over()
-    }
-}
-
-impl Default for Repetition {
-    #[inline]
-    /// Create a `Repetition` instance for only one time.
-    fn default() -> Self {
-        Repetition::new()
     }
 }
