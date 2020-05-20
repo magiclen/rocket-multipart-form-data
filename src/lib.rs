@@ -63,7 +63,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
         let _file_name = text_field.file_name;
         let _text = text_field.text;
 
-        // You can now deal with the raw data.
+        // You can now deal with the text data.
     }
 
     if let Some(text_fields) = email {
