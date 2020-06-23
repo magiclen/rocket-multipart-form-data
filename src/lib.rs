@@ -83,9 +83,6 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
 Also see `examples`.
 */
 
-#[macro_use]
-extern crate educe;
-
 pub extern crate mime;
 
 mod fields;

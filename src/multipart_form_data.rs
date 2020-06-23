@@ -49,7 +49,7 @@ impl MultipartFormData {
             None => return Err(MultipartFormDataError::BoundaryNotFoundError),
         };
 
-        options.allowed_fields.sort();
+        options.allowed_fields.sort_by_key(|e| e.field_name);
 
         let mut multipart = Multipart::with_body(data.open(), boundary);
 

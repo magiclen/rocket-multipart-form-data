@@ -8,21 +8,16 @@ const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
 
 /// The guarder for fields.
-#[derive(Debug, Clone, Educe)]
-#[educe(PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone)]
 pub struct MultipartFormDataField<'a> {
-    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// The type of this field.
     pub typ: MultipartFormDataType,
     /// The name of this field.
     pub field_name: &'a str,
-    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// The size limit for this field.
     pub size_limit: u64,
-    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// To filter the content types. It supports stars.
     pub content_type: Option<Vec<Mime>>,
-    #[educe(PartialEq(ignore), PartialOrd(ignore), Ord(ignore))]
     /// To define this `MultipartFormDataField` instance can be used how many times.
     pub repetition: Repetition,
 }
