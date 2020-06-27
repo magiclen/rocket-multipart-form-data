@@ -1,6 +1,6 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.9.3"
+version = "0.9.4"
 edition = "2018"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/rocket-multipart-form-data"
@@ -10,6 +10,7 @@ categories = ["parser-implementations"]
 description= "This crate provides a multipart parser for the Rocket framework."
 readme = "README.md"
 license = "MIT"
+include = ["src/**/*", "Cargo.toml"]
 
 [badges.travis-ci]
 repository = "magiclen/rocket-multipart-form-data"
