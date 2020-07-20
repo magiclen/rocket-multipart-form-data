@@ -14,12 +14,8 @@ use crate::{
     TextField,
 };
 
-use crate::mime::Mime;
+use crate::mime::{self, Mime};
 
-use rocket::http::hyper::{
-    self,
-    mime::{SubLevel, TopLevel},
-};
 use rocket::http::ContentType;
 use rocket::Data;
 
@@ -61,7 +57,7 @@ impl MultipartFormData {
 
         'outer: while let Some(entry) = multipart.read_entry()? {
             let field_name = entry.headers.name;
-            let content_type = entry.headers.content_type;
+            let content_type: Option<Mime> = entry.headers.content_type;
 
             if let Ok(vi) =
                 options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name))
@@ -73,40 +69,26 @@ impl MultipartFormData {
                     if let Some(content_type_ref) = &field_ref.content_type {
                         let mut mat = false; // Is the content type matching?
 
-                        let (top, sub) = match &content_type {
-                            Some(content_type) => {
-                                let hyper::mime::Mime(top, sub, _) = content_type;
-                                (Some(top), Some(sub))
-                            }
-                            None => (None, None),
-                        };
+                        if let Some(content_type) = content_type.as_ref() {
+                            let top = content_type.type_();
+                            let sub = content_type.subtype();
 
-                        for content_type_ref in content_type_ref {
-                            let mime =
-                                hyper::mime::Mime::from_str(content_type_ref.as_ref()).unwrap();
-                            let hyper::mime::Mime(top_ref, sub_ref, _) = mime;
-                            if top_ref.ne(&TopLevel::Star) {
-                                if let Some(top) = top {
-                                    if top_ref.ne(top) {
-                                        continue;
-                                    }
-                                } else {
+                            for content_type_ref in content_type_ref {
+                                let top_ref = content_type_ref.type_();
+
+                                if top_ref != mime::STAR && top_ref != top {
                                     continue;
                                 }
-                            }
 
-                            if sub_ref.ne(&SubLevel::Star) {
-                                if let Some(sub) = sub {
-                                    if sub_ref.ne(sub) {
-                                        continue;
-                                    }
-                                } else {
+                                let sub_ref = content_type_ref.subtype();
+
+                                if sub_ref != mime::STAR && sub_ref != sub {
                                     continue;
                                 }
-                            }
 
-                            mat = true;
-                            break;
+                                mat = true;
+                                break;
+                            }
                         }
 
                         if !mat {

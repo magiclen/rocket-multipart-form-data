@@ -1,4 +1,4 @@
-#![feature(proc_macro_hygiene, decl_macro)]
+#![feature(decl_macro)]
 
 #[macro_use]
 extern crate rocket_include_static_resources;
@@ -13,7 +13,7 @@ extern crate rocket_multipart_form_data;
 use rocket::http::ContentType;
 use rocket::Data;
 
-use rocket_include_static_resources::{EtagIfNoneMatch, StaticResponse};
+use rocket_include_static_resources::StaticResponse;
 
 use rocket_multipart_form_data::mime;
 use rocket_multipart_form_data::{
@@ -23,8 +23,8 @@ use rocket_multipart_form_data::{
 use rocket_raw_response::RawResponse;
 
 #[get("/")]
-fn index(etag_if_none_match: EtagIfNoneMatch) -> StaticResponse {
-    static_response!(etag_if_none_match, "html-image-uploader")
+fn index() -> StaticResponse {
+    static_response!("html-image-uploader")
 }
 
 #[post("/upload", data = "<data>")]
