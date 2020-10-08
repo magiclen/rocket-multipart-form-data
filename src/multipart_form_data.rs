@@ -62,8 +62,22 @@ impl MultipartFormData {
             if let Ok(vi) =
                 options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name))
             {
+                // To deal with the weird behavior of web browsers
+                // If the client wants to upload an empty file, it should not set the filename to empty string.
+                let mut might_be_empty_file_input_in_html = false;
+
                 {
                     let field_ref = &options.allowed_fields[vi];
+
+                    // The HTTP request body of an empty file input in a HTML form sent by web browsers:
+                    // Content-Disposition: form-data; name="???"; filename=""
+                    // Content-Type: application/octet-stream
+                    if let Some(filename) = entry.headers.filename.as_ref() {
+                        if filename.is_empty() {
+                            // No need to check the MIME type. It's not practical.
+                            might_be_empty_file_input_in_html = true;
+                        }
+                    }
 
                     // Whether to check content type
                     if let Some(content_type_ref) = &field_ref.content_type {
@@ -92,14 +106,20 @@ impl MultipartFormData {
                         }
 
                         if !mat {
-                            output_err = Some(MultipartFormDataError::DataTypeError(field_name));
-
-                            break 'outer;
+                            if might_be_empty_file_input_in_html {
+                                // Reserve the disciplinary action
+                                output_err =
+                                    Some(MultipartFormDataError::DataTypeError(field_name.clone()));
+                            } else {
+                                output_err =
+                                    Some(MultipartFormDataError::DataTypeError(field_name));
+                                break 'outer;
+                            }
                         }
 
                         // The content type has been checked
                     }
-                }
+                };
 
                 let drop_field = {
                     let mut buffer = [0u8; 4096];
@@ -185,6 +205,20 @@ impl MultipartFormData {
                                 }
                             }
 
+                            if might_be_empty_file_input_in_html {
+                                if sum_c == 0 {
+                                    // This file might be from an empty file input in the HTML form, so ignore it.
+                                    try_delete(&target_path);
+
+                                    output_err = None;
+                                    continue;
+                                } else if output_err.is_some() {
+                                    try_delete(&target_path);
+
+                                    break 'outer;
+                                }
+                            }
+
                             let file_name = entry.headers.filename;
 
                             let f = FileField {
@@ -227,6 +261,16 @@ impl MultipartFormData {
                                 bytes.extend_from_slice(&buffer[..c]);
                             }
 
+                            if might_be_empty_file_input_in_html {
+                                if bytes.is_empty() {
+                                    // This file might be from an empty file input in the HTML form, so ignore it.
+                                    output_err = None;
+                                    continue;
+                                } else if output_err.is_some() {
+                                    break 'outer;
+                                }
+                            }
+
                             let file_name = entry.headers.filename;
 
                             let f = RawField {
@@ -267,6 +311,16 @@ impl MultipartFormData {
                                 }
 
                                 text_buffer.extend_from_slice(&buffer[..c]);
+                            }
+
+                            if might_be_empty_file_input_in_html {
+                                if text_buffer.is_empty() {
+                                    // This file might be from an empty file input in the HTML form, so ignore it.
+                                    output_err = None;
+                                    continue;
+                                } else if output_err.is_some() {
+                                    break 'outer;
+                                }
                             }
 
                             let text = match String::from_utf8(text_buffer) {
