@@ -119,7 +119,7 @@ impl MultipartFormData {
 
                         // The content type has been checked
                     }
-                };
+                }
 
                 let drop_field = {
                     let mut buffer = [0u8; 4096];
