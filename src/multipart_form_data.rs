@@ -47,7 +47,7 @@ impl MultipartFormData {
 
         options.allowed_fields.sort_by_key(|e| e.field_name);
 
-        let mut multipart = Multipart::with_body(data.open(), boundary);
+        let mut multipart = Multipart::with_body(WouldBlockFreeRead(data.open()), boundary);
 
         let mut files: HashMap<Arc<str>, Vec<FileField>> = HashMap::new();
         let mut raw: HashMap<Arc<str>, Vec<RawField>> = HashMap::new();
@@ -398,4 +398,38 @@ impl Drop for MultipartFormData {
 #[inline]
 fn try_delete<P: AsRef<Path>>(path: P) {
     if fs::remove_file(path.as_ref()).is_err() {}
+}
+
+// Work around an issue with non blocking I/O which is hard to fix all the through
+// rocket + hyper-0.10. Rocket 0.5 seems not to suffer from that defect, probably due to some
+// special treatment related to async I/O.
+struct WouldBlockFreeRead<R: Read>(R);
+
+const DELAY_BEFORE_WOULD_BLOCK_RETRY: std::time::Duration = std::time::Duration::from_millis(200);
+
+impl<R: Read> Read for WouldBlockFreeRead<R> {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        use backoff::retry;
+        let res = retry(
+            backoff::backoff::Constant::new(DELAY_BEFORE_WOULD_BLOCK_RETRY),
+            || -> Result<usize, backoff::Error<std::io::Error>> {
+                match self.0.read(buf) {
+                    Ok(read) => Ok(read),
+                    Err(
+                        err
+                        @ std::io::Error {
+                            ..
+                        },
+                    ) if err.kind() == std::io::ErrorKind::WouldBlock => {
+                        Err(backoff::Error::Transient(err))
+                    }
+                    Err(err) => Err(backoff::Error::Permanent(err)),
+                }
+            },
+        );
+        match res {
+            Ok(res) => Ok(res),
+            Err(backoff::Error::Permanent(err)) | Err(backoff::Error::Transient(err)) => Err(err),
+        }
+    }
 }
