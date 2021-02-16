@@ -20,6 +20,7 @@ branch = "master"
 rocket = "0.4.5"
 mime = "0.3.12"
 multipart = { version = "0.17", default-features = false, features = ["server"] }
+backoff = "0.3"
 
 [dev-dependencies]
 rocket-include-static-resources = "0.9"
