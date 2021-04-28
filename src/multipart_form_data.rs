@@ -5,7 +5,6 @@ extern crate tokio_util;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -14,7 +13,7 @@ use crate::{
     TextField,
 };
 
-use crate::mime::{self, Mime};
+use crate::mime;
 
 use rocket::http::ContentType;
 use rocket::tokio::fs::File;
@@ -65,8 +64,6 @@ impl MultipartFormData {
                 None => continue,
             };
 
-            let content_type: Option<Mime> = entry.content_type().cloned();
-
             if let Ok(vi) =
                 options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name))
             {
@@ -91,7 +88,7 @@ impl MultipartFormData {
                     if let Some(content_type_ref) = &field_ref.content_type {
                         let mut mat = false; // Is the content type matching?
 
-                        if let Some(content_type) = content_type.as_ref() {
+                        if let Some(content_type) = entry.content_type().as_ref() {
                             let top = content_type.type_();
                             let sub = content_type.subtype();
 
@@ -230,8 +227,7 @@ impl MultipartFormData {
                             let file_name = entry.file_name().map(String::from);
 
                             let f = FileField {
-                                content_type: content_type
-                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                content_type: entry.content_type().cloned(),
                                 file_name,
                                 path: target_path,
                             };
@@ -288,8 +284,7 @@ impl MultipartFormData {
                             let file_name = entry.file_name().map(String::from);
 
                             let f = RawField {
-                                content_type: content_type
-                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                content_type: entry.content_type().cloned(),
                                 file_name,
                                 raw: raw_buffer,
                             };
@@ -355,8 +350,7 @@ impl MultipartFormData {
                             let file_name = entry.file_name().map(String::from);
 
                             let f = TextField {
-                                content_type: content_type
-                                    .map(|mime| Mime::from_str(&mime.to_string()).unwrap()),
+                                content_type: entry.content_type().cloned(),
                                 file_name,
                                 text,
                             };
