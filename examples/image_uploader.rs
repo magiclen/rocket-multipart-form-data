@@ -1,5 +1,3 @@
-#![feature(decl_macro)]
-
 #[macro_use]
 extern crate rocket_include_static_resources;
 
@@ -11,9 +9,9 @@ extern crate rocket;
 extern crate rocket_multipart_form_data;
 
 use rocket::http::ContentType;
-use rocket::Data;
+use rocket::{Data, State};
 
-use rocket_include_static_resources::StaticResponse;
+use rocket_include_static_resources::{EtagIfNoneMatch, StaticContextManager, StaticResponse};
 
 use rocket_multipart_form_data::mime;
 use rocket_multipart_form_data::{
@@ -23,12 +21,15 @@ use rocket_multipart_form_data::{
 use rocket_raw_response::RawResponse;
 
 #[get("/")]
-fn index() -> StaticResponse {
-    static_response!("html-image-uploader")
+fn index(
+    static_resources: State<StaticContextManager>,
+    etag_if_none_match: EtagIfNoneMatch,
+) -> StaticResponse {
+    static_resources.build(&etag_if_none_match, "html-image-uploader")
 }
 
 #[post("/upload", data = "<data>")]
-fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
+async fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
         MultipartFormDataField::raw("image")
             .size_limit(32 * 1024 * 1024)
@@ -36,7 +37,8 @@ fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'stati
             .unwrap(),
     ]);
 
-    let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options) {
+    let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options).await
+    {
         Ok(multipart_form_data) => multipart_form_data,
         Err(err) => {
             match err {
@@ -67,16 +69,10 @@ fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'stati
     }
 }
 
-fn main() {
-    rocket::ignite()
-        .attach(StaticResponse::fairing(|resources| {
-            static_resources_initialize!(
-                resources,
-                "html-image-uploader",
-                "examples/front-end/html/image-uploader.html",
-            );
-        }))
+#[launch]
+fn rocket() -> _ {
+    rocket::build()
+        .attach(static_resources_initializer!("html-image-uploader" => "examples/front-end/html/image-uploader.html"))
         .mount("/", routes![index])
         .mount("/", routes![upload])
-        .launch();
 }

@@ -6,8 +6,6 @@ This crate provides a multipart parser for the Rocket framework.
 ## Example
 
 ```rust
-#![feature(proc_macro_hygiene, decl_macro)]
-
 #[macro_use] extern crate rocket;
 extern crate rocket_multipart_form_data;
 
@@ -17,8 +15,7 @@ use rocket::http::ContentType;
 use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, Repetition};
 
 #[post("/", data = "<data>")]
-fn index(content_type: &ContentType, data: Data) -> &'static str
-{
+async fn index(content_type: &ContentType, data: Data) -> &'static str {
     let mut options = MultipartFormDataOptions::with_multipart_form_data_fields(
         vec! [
             MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap(),
@@ -29,7 +26,7 @@ fn index(content_type: &ContentType, data: Data) -> &'static str
         ]
     );
 
-    let mut multipart_form_data = MultipartFormData::parse(content_type, data, options).unwrap();
+    let mut multipart_form_data = MultipartFormData::parse(content_type, data, options).await.unwrap();
 
     let photo = multipart_form_data.files.get("photo"); // Use the get method to preserve file fields from moving out of the MultipartFormData instance in order to delete them automatically when the MultipartFormData instance is being dropped
     let fingerprint = multipart_form_data.raw.remove("fingerprint"); // Use the remove method to move raw fields out of the MultipartFormData instance (recommended)

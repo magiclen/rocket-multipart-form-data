@@ -6,6 +6,8 @@ use crate::MultipartFormDataField;
 /// Options for parsing multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormDataOptions<'a> {
+    /// The max number of bytes to read.
+    pub max_data_bytes: u64,
     /// A path of directory where the uploaded files will be stored. It should be created before parsing.
     pub temporary_dir: PathBuf,
     /// Allowed fields of data.
@@ -17,6 +19,7 @@ impl<'a> MultipartFormDataOptions<'a> {
     #[inline]
     pub fn new() -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
+            max_data_bytes: u64::max_value(),
             temporary_dir: env::temp_dir(),
             allowed_fields: Vec::new(),
         }
@@ -28,6 +31,7 @@ impl<'a> MultipartFormDataOptions<'a> {
         allowed_fields: Vec<MultipartFormDataField<'a>>,
     ) -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
+            max_data_bytes: u64::max_value(),
             temporary_dir: env::temp_dir(),
             allowed_fields,
         }

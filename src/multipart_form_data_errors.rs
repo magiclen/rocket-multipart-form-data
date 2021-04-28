@@ -1,3 +1,5 @@
+extern crate multer;
+
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io;
@@ -9,6 +11,7 @@ pub enum MultipartFormDataError {
     NotFormDataError,
     BoundaryNotFoundError,
     IOError(io::Error),
+    MulterError(multer::Error),
     FromUtf8Error(FromUtf8Error),
     DataTooLargeError(Arc<str>),
     DataTypeError(Arc<str>),
@@ -18,6 +21,13 @@ impl From<io::Error> for MultipartFormDataError {
     #[inline]
     fn from(err: io::Error) -> MultipartFormDataError {
         MultipartFormDataError::IOError(err)
+    }
+}
+
+impl From<multer::Error> for MultipartFormDataError {
+    #[inline]
+    fn from(err: multer::Error) -> MultipartFormDataError {
+        MultipartFormDataError::MulterError(err)
     }
 }
 
@@ -41,6 +51,7 @@ impl Display for MultipartFormDataError {
                 )
             }
             MultipartFormDataError::IOError(err) => Display::fmt(err, f),
+            MultipartFormDataError::MulterError(err) => Display::fmt(err, f),
             MultipartFormDataError::FromUtf8Error(err) => Display::fmt(err, f),
             MultipartFormDataError::DataTooLargeError(field) => {
                 f.write_fmt(format_args!("The data of field `{}` is too large.", field))
