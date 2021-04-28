@@ -33,7 +33,3 @@ jobs:
       - run: cargo build --examples --release
       - run: cargo test --release
       - run: cargo doc --release
-      - run: cargo build --release --features cache
-      - run: cargo build --examples --release --features cache
-      - run: cargo test --release --features cache
-      - run: cargo doc --release --features cache
