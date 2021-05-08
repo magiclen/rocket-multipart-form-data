@@ -17,7 +17,7 @@ use rocket_raw_response::RawResponsePro;
 struct MultipartFormData<'v> {
     #[field(validate = ext(ContentType::JPEG))] // only JPEG, cannot be other image types (yet?)
     #[field(validate = len(..32.mebibytes()))]
-    image: TempFile<'v>, // need to be `TempFile<'_>`, cannot be Vec<u8> (yet?)
+    image: TempFile<'v>, // need to be `TempFile<'_>`, cannot be `Vec<u8>` (yet?)
 }
 
 static_response_handler! {
