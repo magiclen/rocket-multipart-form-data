@@ -81,6 +81,7 @@ Also see `examples`.
 */
 
 pub extern crate mime;
+pub extern crate multer;
 
 mod fields;
 mod multipart_form_data;

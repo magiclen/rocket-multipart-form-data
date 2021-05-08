@@ -9,33 +9,29 @@ extern crate rocket;
 extern crate rocket_multipart_form_data;
 
 use rocket::http::ContentType;
-use rocket::{Data, State};
+use rocket::Data;
 
-use rocket_include_static_resources::{EtagIfNoneMatch, StaticContextManager, StaticResponse};
-
-use rocket_multipart_form_data::mime;
+use rocket_multipart_form_data::{mime, multer};
 use rocket_multipart_form_data::{
     MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
 };
 
 use rocket_raw_response::RawResponse;
 
-#[get("/")]
-fn index(
-    static_resources: State<StaticContextManager>,
-    etag_if_none_match: EtagIfNoneMatch,
-) -> StaticResponse {
-    static_resources.build(&etag_if_none_match, "html-image-uploader")
+static_response_handler! {
+    "/" => index => "html-image-uploader",
 }
 
 #[post("/upload", data = "<data>")]
 async fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
-    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
-        MultipartFormDataField::raw("image")
+    let options = MultipartFormDataOptions {
+        max_data_bytes: 33 * 1024 * 1024,
+        allowed_fields: vec![MultipartFormDataField::raw("image")
             .size_limit(32 * 1024 * 1024)
             .content_type_by_string(Some(mime::IMAGE_STAR))
-            .unwrap(),
-    ]);
+            .unwrap()],
+        ..MultipartFormDataOptions::default()
+    };
 
     let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options).await
     {
@@ -47,6 +43,15 @@ async fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &
                 }
                 MultipartFormDataError::DataTypeError(_) => {
                     return Err("The file is not an image.");
+                }
+                MultipartFormDataError::MulterError(multer::Error::IncompleteFieldData {
+                    ..
+                })
+                | MultipartFormDataError::MulterError(multer::Error::IncompleteHeaders {
+                    ..
+                }) => {
+                    // may happen when we set the max_data_bytes limitation
+                    return Err("The request body seems too large.");
                 }
                 _ => panic!("{:?}", err),
             }

@@ -1,4 +1,3 @@
-extern crate multer;
 extern crate rocket;
 extern crate tokio_util;
 
@@ -20,7 +19,7 @@ use rocket::tokio::fs::File;
 use rocket::tokio::io::AsyncWriteExt;
 use rocket::Data;
 
-use multer::Multipart;
+use crate::multer::Multipart;
 
 /// Parsed multipart/form-data.
 #[derive(Debug)]

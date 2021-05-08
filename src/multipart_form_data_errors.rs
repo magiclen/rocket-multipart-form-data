@@ -1,10 +1,10 @@
-extern crate multer;
-
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 use std::io;
 use std::string::FromUtf8Error;
 use std::sync::Arc;
+
+use crate::multer;
 
 #[derive(Debug)]
 pub enum MultipartFormDataError {
