@@ -15,7 +15,7 @@ use rocket::http::ContentType;
 use rocket_multipart_form_data::{mime, MultipartFormDataOptions, MultipartFormData, MultipartFormDataField, Repetition};
 
 #[post("/", data = "<data>")]
-async fn index(content_type: &ContentType, data: Data) -> &'static str {
+async fn index(content_type: &ContentType, data: Data<'_>) -> &'static str {
     let mut options = MultipartFormDataOptions::with_multipart_form_data_fields(
         vec! [
             MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap(),

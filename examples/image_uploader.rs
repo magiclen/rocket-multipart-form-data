@@ -23,7 +23,7 @@ static_response_handler! {
 }
 
 #[post("/upload", data = "<data>")]
-async fn upload(content_type: &ContentType, data: Data) -> Result<RawResponse, &'static str> {
+async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawResponse, &'static str> {
     let options = MultipartFormDataOptions {
         max_data_bytes: 33 * 1024 * 1024,
         allowed_fields: vec![MultipartFormDataField::raw("image")

@@ -7,8 +7,9 @@ extern crate rocket_raw_response;
 extern crate rocket;
 
 use rocket::config::Config;
-use rocket::data::{Limits, TempFile, ToByteUnit};
+use rocket::data::{Limits, ToByteUnit};
 use rocket::form::{Contextual, Form};
+use rocket::fs::TempFile;
 use rocket::http::ContentType;
 
 use rocket_raw_response::RawResponsePro;

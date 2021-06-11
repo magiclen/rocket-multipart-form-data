@@ -15,7 +15,7 @@ include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 [dependencies]
 rocket = { git = "https://github.com/SergioBenitez/Rocket", version = "0.5.0-dev" }
 mime = "0.3.12"
-multer = { git = "https://github.com/rousan/multer-rs" }
+multer = "2"
 tokio-util = "0.6.6"
 
 [dev-dependencies]

@@ -33,7 +33,7 @@ impl MultipartFormData {
     /// Parse multipart/form-data from the HTTP body.
     pub async fn parse(
         content_type: &ContentType,
-        data: Data,
+        data: Data<'_>,
         mut options: MultipartFormDataOptions<'_>,
     ) -> Result<MultipartFormData, MultipartFormDataError> {
         if !content_type.is_form_data() {
