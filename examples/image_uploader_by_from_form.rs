@@ -36,7 +36,7 @@ fn upload<'r>(
 
             Ok(RawResponsePro::from_temp_file(image_file, Some(file_name), None))
         }
-        None => return Err("Incorrect."),
+        None => Err("Incorrect."),
     }
 }
 

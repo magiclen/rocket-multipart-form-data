@@ -65,7 +65,7 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
             let raw = image.remove(0);
 
             let content_type = raw.content_type;
-            let file_name = raw.file_name.unwrap_or("Image".to_string());
+            let file_name = raw.file_name.unwrap_or_else(|| "Image".to_string());
             let data = raw.raw;
 
             Ok(RawResponse::from_vec(data, Some(file_name), content_type))
