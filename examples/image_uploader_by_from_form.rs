@@ -1,8 +1,6 @@
 #[macro_use]
 extern crate rocket_include_static_resources;
 
-extern crate rocket_raw_response;
-
 #[macro_use]
 extern crate rocket;
 

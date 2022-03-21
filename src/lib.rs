@@ -7,7 +7,6 @@ This crate provides a multipart parser for the Rocket framework.
 
 ```rust
 #[macro_use] extern crate rocket;
-extern crate rocket_multipart_form_data;
 
 use rocket::Data;
 use rocket::http::ContentType;

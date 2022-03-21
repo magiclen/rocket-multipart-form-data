@@ -1,12 +1,8 @@
 #[macro_use]
 extern crate rocket_include_static_resources;
 
-extern crate rocket_raw_response;
-
 #[macro_use]
 extern crate rocket;
-
-extern crate rocket_multipart_form_data;
 
 use rocket::http::ContentType;
 use rocket::Data;
