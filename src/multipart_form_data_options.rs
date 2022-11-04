@@ -19,7 +19,7 @@ impl<'a> MultipartFormDataOptions<'a> {
     #[inline]
     pub fn new() -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
-            max_data_bytes: u64::max_value(),
+            max_data_bytes: u64::MAX,
             temporary_dir: env::temp_dir(),
             allowed_fields: Vec::new(),
         }
@@ -31,7 +31,7 @@ impl<'a> MultipartFormDataOptions<'a> {
         allowed_fields: Vec<MultipartFormDataField<'a>>,
     ) -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
-            max_data_bytes: u64::max_value(),
+            max_data_bytes: u64::MAX,
             temporary_dir: env::temp_dir(),
             allowed_fields,
         }
