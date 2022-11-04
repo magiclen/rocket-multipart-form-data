@@ -371,7 +371,7 @@ impl MultipartFormData {
         if let Some(err) = output_err {
             for (_, fields) in files {
                 for f in fields {
-                    try_delete(&f.path);
+                    try_delete(f.path);
                 }
             }
 
