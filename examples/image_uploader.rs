@@ -4,14 +4,11 @@ extern crate rocket_include_static_resources;
 #[macro_use]
 extern crate rocket;
 
-use rocket::http::ContentType;
-use rocket::Data;
-
-use rocket_multipart_form_data::{mime, multer};
+use rocket::{http::ContentType, Data};
 use rocket_multipart_form_data::{
-    MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
+    mime, multer, MultipartFormData, MultipartFormDataError, MultipartFormDataField,
+    MultipartFormDataOptions,
 };
-
 use rocket_raw_response::RawResponse;
 
 static_response_handler! {
@@ -36,10 +33,10 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
             match err {
                 MultipartFormDataError::DataTooLargeError(_) => {
                     return Err("The file is too large.");
-                }
+                },
                 MultipartFormDataError::DataTypeError(_) => {
                     return Err("The file is not an image.");
-                }
+                },
                 MultipartFormDataError::MulterError(multer::Error::IncompleteFieldData {
                     ..
                 })
@@ -48,10 +45,10 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
                 }) => {
                     // may happen when we set the max_data_bytes limitation
                     return Err("The request body seems too large.");
-                }
+                },
                 _ => panic!("{:?}", err),
             }
-        }
+        },
     };
 
     let image = multipart_form_data.raw.remove("image");
@@ -65,7 +62,7 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
             let data = raw.raw;
 
             Ok(RawResponse::from_vec(data, Some(file_name), content_type))
-        }
+        },
         None => Err("Please input a file."),
     }
 }

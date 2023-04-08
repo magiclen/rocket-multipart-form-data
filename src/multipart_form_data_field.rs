@@ -1,8 +1,6 @@
 use std::str::FromStr;
 
-use crate::mime::Mime;
-
-use crate::{MultipartFormDataType, Repetition};
+use crate::{mime::Mime, MultipartFormDataType, Repetition};
 
 const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
@@ -11,15 +9,15 @@ const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
 #[derive(Debug, Clone)]
 pub struct MultipartFormDataField<'a> {
     /// The type of this field.
-    pub typ: MultipartFormDataType,
+    pub typ:          MultipartFormDataType,
     /// The name of this field.
-    pub field_name: &'a str,
+    pub field_name:   &'a str,
     /// The size limit for this field.
-    pub size_limit: u64,
+    pub size_limit:   u64,
     /// To filter the content types. It supports stars.
     pub content_type: Option<Vec<Mime>>,
     /// To define this `MultipartFormDataField` instance can be used how many times.
-    pub repetition: Repetition,
+    pub repetition:   Repetition,
 }
 
 impl<'a> MultipartFormDataField<'a> {
@@ -27,11 +25,11 @@ impl<'a> MultipartFormDataField<'a> {
     #[inline]
     pub fn text<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
-            typ: MultipartFormDataType::Text,
-            field_name: field_name.as_ref(),
-            size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
+            typ:          MultipartFormDataType::Text,
+            field_name:   field_name.as_ref(),
+            size_limit:   DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
-            repetition: Repetition::default(),
+            repetition:   Repetition::default(),
         }
     }
 
@@ -45,11 +43,11 @@ impl<'a> MultipartFormDataField<'a> {
     #[inline]
     pub fn raw<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
-            typ: MultipartFormDataType::Raw,
-            field_name: field_name.as_ref(),
-            size_limit: DEFAULT_IN_MEMORY_DATA_LIMIT,
+            typ:          MultipartFormDataType::Raw,
+            field_name:   field_name.as_ref(),
+            size_limit:   DEFAULT_IN_MEMORY_DATA_LIMIT,
             content_type: None,
-            repetition: Repetition::default(),
+            repetition:   Repetition::default(),
         }
     }
 
@@ -57,11 +55,11 @@ impl<'a> MultipartFormDataField<'a> {
     #[inline]
     pub fn file<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
         MultipartFormDataField {
-            typ: MultipartFormDataType::File,
-            field_name: field_name.as_ref(),
-            size_limit: DEFAULT_FILE_DATA_LIMIT,
+            typ:          MultipartFormDataType::File,
+            field_name:   field_name.as_ref(),
+            size_limit:   DEFAULT_FILE_DATA_LIMIT,
             content_type: None,
-            repetition: Repetition::default(),
+            repetition:   Repetition::default(),
         }
     }
 
@@ -76,16 +74,14 @@ impl<'a> MultipartFormDataField<'a> {
     #[inline]
     pub fn content_type(mut self, content_type: Option<Mime>) -> MultipartFormDataField<'a> {
         match content_type {
-            Some(content_type) => {
-                match self.content_type.as_mut() {
-                    Some(v) => {
-                        v.push(content_type);
-                    }
-                    None => {
-                        self.content_type = Some(vec![content_type]);
-                    }
-                }
-            }
+            Some(content_type) => match self.content_type.as_mut() {
+                Some(v) => {
+                    v.push(content_type);
+                },
+                None => {
+                    self.content_type = Some(vec![content_type]);
+                },
+            },
             None => self.content_type = None,
         }
         self
@@ -103,12 +99,12 @@ impl<'a> MultipartFormDataField<'a> {
                 match self.content_type.as_mut() {
                     Some(v) => {
                         v.push(content_type);
-                    }
+                    },
                     None => {
                         self.content_type = Some(vec![content_type]);
-                    }
+                    },
                 }
-            }
+            },
             None => self.content_type = None,
         }
         Ok(self)

@@ -1,28 +1,21 @@
-use std::collections::HashMap;
-use std::fs;
-use std::path::Path;
-use std::sync::Arc;
-use std::time::SystemTime;
+use std::{collections::HashMap, fs, path::Path, sync::Arc, time::SystemTime};
 
-use crate::{
-    FileField, MultipartFormDataError, MultipartFormDataOptions, MultipartFormDataType, RawField,
-    TextField,
+use rocket::{
+    http::ContentType,
+    tokio::{fs::File, io::AsyncWriteExt},
+    Data,
 };
 
-use crate::mime;
-
-use rocket::http::ContentType;
-use rocket::tokio::fs::File;
-use rocket::tokio::io::AsyncWriteExt;
-use rocket::Data;
-
-use crate::multer::Multipart;
+use crate::{
+    mime, multer::Multipart, FileField, MultipartFormDataError, MultipartFormDataOptions,
+    MultipartFormDataType, RawField, TextField,
+};
 
 /// Parsed multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormData {
     pub files: HashMap<Arc<str>, Vec<FileField>>,
-    pub raw: HashMap<Arc<str>, Vec<RawField>>,
+    pub raw:   HashMap<Arc<str>, Vec<RawField>>,
     pub texts: HashMap<Arc<str>, Vec<TextField>>,
 }
 
@@ -158,51 +151,49 @@ impl MultipartFormData {
                                     output_err = Some(err.into());
 
                                     break 'outer;
-                                }
+                                },
                             };
 
                             let mut sum_c = 0u64;
 
                             loop {
                                 match entry.chunk().await {
-                                    Ok(bytes) => {
-                                        match bytes {
-                                            Some(bytes) => {
-                                                sum_c += bytes.len() as u64;
+                                    Ok(bytes) => match bytes {
+                                        Some(bytes) => {
+                                            sum_c += bytes.len() as u64;
 
-                                                if sum_c > field.size_limit {
+                                            if sum_c > field.size_limit {
+                                                try_delete(&target_path);
+
+                                                output_err = Some(
+                                                    MultipartFormDataError::DataTooLargeError(
+                                                        field_name,
+                                                    ),
+                                                );
+
+                                                break 'outer;
+                                            }
+
+                                            match file.write_all(bytes.as_ref()).await {
+                                                Ok(_) => (),
+                                                Err(err) => {
                                                     try_delete(&target_path);
 
-                                                    output_err = Some(
-                                                        MultipartFormDataError::DataTooLargeError(
-                                                            field_name,
-                                                        ),
-                                                    );
+                                                    output_err = Some(err.into());
 
                                                     break 'outer;
-                                                }
-
-                                                match file.write_all(bytes.as_ref()).await {
-                                                    Ok(_) => (),
-                                                    Err(err) => {
-                                                        try_delete(&target_path);
-
-                                                        output_err = Some(err.into());
-
-                                                        break 'outer;
-                                                    }
-                                                }
+                                                },
                                             }
-                                            None => break,
-                                        }
-                                    }
+                                        },
+                                        None => break,
+                                    },
                                     Err(err) => {
                                         try_delete(&target_path);
 
                                         output_err = Some(err.into());
 
                                         break 'outer;
-                                    }
+                                    },
                                 }
                             }
 
@@ -233,37 +224,35 @@ impl MultipartFormData {
                             } else {
                                 files.insert(field_name, vec![f]);
                             }
-                        }
+                        },
                         MultipartFormDataType::Raw => {
                             let mut raw_buffer = Vec::new();
 
                             loop {
                                 match entry.chunk().await {
-                                    Ok(bytes) => {
-                                        match bytes {
-                                            Some(bytes) => {
-                                                if raw_buffer.len() as u64 + bytes.len() as u64
-                                                    > field.size_limit
-                                                {
-                                                    output_err = Some(
-                                                        MultipartFormDataError::DataTooLargeError(
-                                                            field_name,
-                                                        ),
-                                                    );
+                                    Ok(bytes) => match bytes {
+                                        Some(bytes) => {
+                                            if raw_buffer.len() as u64 + bytes.len() as u64
+                                                > field.size_limit
+                                            {
+                                                output_err = Some(
+                                                    MultipartFormDataError::DataTooLargeError(
+                                                        field_name,
+                                                    ),
+                                                );
 
-                                                    break 'outer;
-                                                }
-
-                                                raw_buffer.extend_from_slice(bytes.as_ref());
+                                                break 'outer;
                                             }
-                                            None => break,
-                                        }
-                                    }
+
+                                            raw_buffer.extend_from_slice(bytes.as_ref());
+                                        },
+                                        None => break,
+                                    },
                                     Err(err) => {
                                         output_err = Some(err.into());
 
                                         break 'outer;
-                                    }
+                                    },
                                 }
                             }
 
@@ -290,37 +279,35 @@ impl MultipartFormData {
                             } else {
                                 raw.insert(field_name, vec![f]);
                             }
-                        }
+                        },
                         MultipartFormDataType::Text => {
                             let mut text_buffer = Vec::new();
 
                             loop {
                                 match entry.chunk().await {
-                                    Ok(bytes) => {
-                                        match bytes {
-                                            Some(bytes) => {
-                                                if text_buffer.len() as u64 + bytes.len() as u64
-                                                    > field.size_limit
-                                                {
-                                                    output_err = Some(
-                                                        MultipartFormDataError::DataTooLargeError(
-                                                            field_name,
-                                                        ),
-                                                    );
+                                    Ok(bytes) => match bytes {
+                                        Some(bytes) => {
+                                            if text_buffer.len() as u64 + bytes.len() as u64
+                                                > field.size_limit
+                                            {
+                                                output_err = Some(
+                                                    MultipartFormDataError::DataTooLargeError(
+                                                        field_name,
+                                                    ),
+                                                );
 
-                                                    break 'outer;
-                                                }
-
-                                                text_buffer.extend_from_slice(bytes.as_ref());
+                                                break 'outer;
                                             }
-                                            None => break,
-                                        }
-                                    }
+
+                                            text_buffer.extend_from_slice(bytes.as_ref());
+                                        },
+                                        None => break,
+                                    },
                                     Err(err) => {
                                         output_err = Some(err.into());
 
                                         break 'outer;
-                                    }
+                                    },
                                 }
                             }
 
@@ -340,7 +327,7 @@ impl MultipartFormData {
                                     output_err = Some(err.into());
 
                                     break 'outer;
-                                }
+                                },
                             };
 
                             let file_name = entry.file_name().map(String::from);
@@ -356,7 +343,7 @@ impl MultipartFormData {
                             } else {
                                 texts.insert(field_name, vec![f]);
                             }
-                        }
+                        },
                     }
 
                     field.repetition.decrease_check_is_over()

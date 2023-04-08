@@ -13,7 +13,7 @@ impl RepetitionCounter {
 
                 *n -= 1;
                 *n == 0
-            }
+            },
             RepetitionCounter::Infinite => false,
         }
     }
@@ -37,7 +37,7 @@ impl Repetition {
     /// Create a `Repetition` instance for only one time.
     pub fn new() -> Repetition {
         Repetition {
-            counter: RepetitionCounter::Fixed(1),
+            counter: RepetitionCounter::Fixed(1)
         }
     }
 
@@ -45,12 +45,15 @@ impl Repetition {
     /// Create a `Repetition` instance for any fixed times.
     pub fn fixed(count: u32) -> Repetition {
         if count == 0 {
-            eprintln!("The count of fixed repetition for a `MultipartFormDataField` instance should be bigger than 0. Use 1 instead.");
+            eprintln!(
+                "The count of fixed repetition for a `MultipartFormDataField` instance should be \
+                 bigger than 0. Use 1 instead."
+            );
 
             Repetition::new()
         } else {
             Repetition {
-                counter: RepetitionCounter::Fixed(count),
+                counter: RepetitionCounter::Fixed(count)
             }
         }
     }
@@ -59,7 +62,7 @@ impl Repetition {
     /// Create a `Repetition` instance for infinite times.
     pub fn infinite() -> Repetition {
         Repetition {
-            counter: RepetitionCounter::Infinite,
+            counter: RepetitionCounter::Infinite
         }
     }
 

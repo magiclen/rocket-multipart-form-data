@@ -1,5 +1,4 @@
-use std::env;
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 use crate::MultipartFormDataField;
 
@@ -9,7 +8,7 @@ pub struct MultipartFormDataOptions<'a> {
     /// The max number of bytes to read.
     pub max_data_bytes: u64,
     /// A path of directory where the uploaded files will be stored. It should be created before parsing.
-    pub temporary_dir: PathBuf,
+    pub temporary_dir:  PathBuf,
     /// Allowed fields of data.
     pub allowed_fields: Vec<MultipartFormDataField<'a>>,
 }
@@ -20,7 +19,7 @@ impl<'a> MultipartFormDataOptions<'a> {
     pub fn new() -> MultipartFormDataOptions<'a> {
         MultipartFormDataOptions {
             max_data_bytes: u64::MAX,
-            temporary_dir: env::temp_dir(),
+            temporary_dir:  env::temp_dir(),
             allowed_fields: Vec::new(),
         }
     }

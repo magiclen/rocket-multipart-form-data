@@ -4,12 +4,13 @@ extern crate rocket_include_static_resources;
 #[macro_use]
 extern crate rocket;
 
-use rocket::config::Config;
-use rocket::data::{Limits, ToByteUnit};
-use rocket::form::{Contextual, Form};
-use rocket::fs::TempFile;
-use rocket::http::ContentType;
-
+use rocket::{
+    config::Config,
+    data::{Limits, ToByteUnit},
+    form::{Contextual, Form},
+    fs::TempFile,
+    http::ContentType,
+};
 use rocket_raw_response::RawResponsePro;
 
 #[derive(Debug, FromForm)]
@@ -33,7 +34,7 @@ fn upload<'r>(
             let file_name = image_file.name().unwrap_or("Image").to_string();
 
             Ok(RawResponsePro::from_temp_file(image_file, Some(file_name), None))
-        }
+        },
         None => Err("Incorrect."),
     }
 }
