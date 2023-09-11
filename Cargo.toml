@@ -1,8 +1,8 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.10.5"
+version = "0.10.6"
 edition = "2021"
-rust-version = "1.63"
+rust-version = "1.67"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/rocket-multipart-form-data"
 homepage = "https://magiclen.org/rocket-multipart-form-data"
