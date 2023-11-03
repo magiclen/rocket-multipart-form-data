@@ -1,8 +1,8 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.10.6"
+version = "0.10.7"
 edition = "2021"
-rust-version = "1.67"
+rust-version = "1.69"
 authors = ["Magic Len <len@magiclen.org>"]
 repository = "https://github.com/magiclen/rocket-multipart-form-data"
 homepage = "https://magiclen.org/rocket-multipart-form-data"
@@ -13,7 +13,7 @@ license = "MIT"
 include = ["src/**/*", "Cargo.toml", "README.md", "LICENSE"]
 
 [dependencies]
-rocket = "0.5.0-rc.3"
+rocket = "0.5.0-rc.4"
 mime = "0.3.12"
 multer = "2"
 tokio-util = { version = "0.7", features = ["io"] }
