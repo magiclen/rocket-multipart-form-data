@@ -10,6 +10,8 @@ pub struct MultipartFormDataOptions<'a> {
     /// A path of directory where the uploaded files will be stored. It should be created before parsing.
     pub temporary_dir:  PathBuf,
     /// Allowed fields of data.
+    ///
+    /// Several entries may share the same `field_name`. Their repetitions add up, but which entry is applied to a specific occurrence is unspecified.
     pub allowed_fields: Vec<MultipartFormDataField<'a>>,
 }
 

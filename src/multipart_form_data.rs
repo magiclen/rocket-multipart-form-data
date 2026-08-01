@@ -1,9 +1,9 @@
-use std::{collections::HashMap, fs, path::Path, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, fs, io, path::Path, sync::Arc, time::SystemTime};
 
 use rocket::{
     Data,
     http::ContentType,
-    tokio::{fs::File, io::AsyncWriteExt},
+    tokio::{fs::OpenOptions, io::AsyncWriteExt},
 };
 
 use crate::{
@@ -47,281 +47,224 @@ impl MultipartFormData {
 
         let mut output_err: Option<MultipartFormDataError> = None;
 
-        'outer: while let Some(mut entry) = multipart.next_field().await? {
-            let field_name = match entry.name() {
-                Some(name) => Arc::from(name),
+        'outer: loop {
+            let mut entry = match multipart.next_field().await {
+                Ok(Some(entry)) => entry,
+                Ok(None) => break,
+                Err(err) => {
+                    // Do not return here, or the temporary files created so far would be left behind.
+                    output_err = Some(err.into());
+
+                    break;
+                },
+            };
+
+            // Search by `&str` first so that a disallowed field does not allocate an `Arc`.
+            let (vi, field_name) = match entry.name() {
+                Some(name) => {
+                    match options.allowed_fields.binary_search_by(|f| f.field_name.cmp(name)) {
+                        Ok(vi) => (vi, Arc::<str>::from(name)),
+                        Err(_) => continue,
+                    }
+                },
                 None => continue,
             };
 
-            if let Ok(vi) =
-                options.allowed_fields.binary_search_by(|f| f.field_name.cmp(&field_name))
+            // To deal with the weird behavior of web browsers
+            // If the client wants to upload an empty file, it should not set the filename to empty string.
+            let mut might_be_empty_file_input_in_html = false;
+
             {
-                // To deal with the weird behavior of web browsers
-                // If the client wants to upload an empty file, it should not set the filename to empty string.
-                let mut might_be_empty_file_input_in_html = false;
+                let field_ref = &options.allowed_fields[vi];
 
+                // The HTTP request body of an empty file input in a HTML form sent by web browsers:
+                // Content-Disposition: form-data; name="???"; filename=""
+                // Content-Type: application/octet-stream
+                if let Some(filename) = entry.file_name()
+                    && filename.is_empty()
                 {
-                    let field_ref = &options.allowed_fields[vi];
-
-                    // The HTTP request body of an empty file input in a HTML form sent by web browsers:
-                    // Content-Disposition: form-data; name="???"; filename=""
-                    // Content-Type: application/octet-stream
-                    if let Some(filename) = entry.file_name()
-                        && filename.is_empty()
-                    {
-                        // No need to check the MIME type. It's not practical.
-                        might_be_empty_file_input_in_html = true;
-                    }
-
-                    // Whether to check content type
-                    if let Some(content_type_ref) = &field_ref.content_type {
-                        let mut mat = false; // Is the content type matching?
-
-                        if let Some(content_type) = entry.content_type().as_ref() {
-                            let top = content_type.type_();
-                            let sub = content_type.subtype();
-
-                            for content_type_ref in content_type_ref {
-                                let top_ref = content_type_ref.type_();
-
-                                if top_ref != mime::STAR && top_ref != top {
-                                    continue;
-                                }
-
-                                let sub_ref = content_type_ref.subtype();
-
-                                if sub_ref != mime::STAR && sub_ref != sub {
-                                    continue;
-                                }
-
-                                mat = true;
-                                break;
-                            }
-                        }
-
-                        if !mat {
-                            if might_be_empty_file_input_in_html {
-                                // Reserve the disciplinary action
-                                output_err =
-                                    Some(MultipartFormDataError::DataTypeError(field_name.clone()));
-                            } else {
-                                output_err =
-                                    Some(MultipartFormDataError::DataTypeError(field_name));
-                                break 'outer;
-                            }
-                        }
-
-                        // The content type has been checked
-                    }
+                    // No need to check the MIME type. It's not practical.
+                    might_be_empty_file_input_in_html = true;
                 }
 
-                let drop_field = {
-                    let field = unsafe { options.allowed_fields.get_unchecked_mut(vi) };
+                // Whether to check content type
+                if let Some(content_type_ref) = &field_ref.content_type {
+                    let mut mat = false; // Is the content type matching?
 
-                    match field.typ {
-                        MultipartFormDataType::File => {
-                            let target_file_name = format!(
-                                "rs-{}",
-                                SystemTime::now()
-                                    .duration_since(SystemTime::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_nanos()
-                            );
+                    if let Some(content_type) = entry.content_type() {
+                        let top = content_type.type_();
+                        let sub = content_type.subtype();
 
-                            let target_path = {
-                                let mut p = Path::join(&options.temporary_dir, &target_file_name);
+                        for content_type_ref in content_type_ref {
+                            let top_ref = content_type_ref.type_();
 
-                                let mut i = 1usize;
+                            if top_ref != mime::STAR && top_ref != top {
+                                continue;
+                            }
 
-                                while p.exists() {
-                                    p = Path::join(
-                                        &options.temporary_dir,
-                                        format!("{}-{}", target_file_name, i),
-                                    );
+                            let sub_ref = content_type_ref.subtype();
 
-                                    i += 1;
-                                }
+                            if sub_ref != mime::STAR && sub_ref != sub {
+                                continue;
+                            }
 
-                                p
-                            };
+                            mat = true;
+                            break;
+                        }
+                    }
 
-                            let mut file = match File::create(&target_path).await {
-                                Ok(f) => f,
-                                Err(err) => {
-                                    output_err = Some(err.into());
+                    if !mat {
+                        if might_be_empty_file_input_in_html {
+                            // Reserve the disciplinary action
+                            output_err =
+                                Some(MultipartFormDataError::DataTypeError(field_name.clone()));
+                        } else {
+                            output_err = Some(MultipartFormDataError::DataTypeError(field_name));
+                            break 'outer;
+                        }
+                    }
 
-                                    break 'outer;
-                                },
-                            };
+                    // The content type has been checked
+                }
+            }
 
-                            let mut sum_c = 0u64;
+            let drop_field = {
+                // SAFETY: `vi` comes from a successful `binary_search_by` on `allowed_fields`, which has not been modified since then.
+                let field = unsafe { options.allowed_fields.get_unchecked_mut(vi) };
+
+                match field.typ {
+                    MultipartFormDataType::File => {
+                        let target_file_name = format!(
+                            "rs-{}",
+                            SystemTime::now()
+                                .duration_since(SystemTime::UNIX_EPOCH)
+                                .unwrap_or_default()
+                                .as_nanos()
+                        );
+
+                        let (mut file, target_path) = {
+                            let mut p = Path::join(&options.temporary_dir, &target_file_name);
+
+                            let mut i = 1usize;
 
                             loop {
-                                match entry.chunk().await {
-                                    Ok(bytes) => match bytes {
-                                        Some(bytes) => {
-                                            sum_c += bytes.len() as u64;
+                                // `create_new` creates the file atomically, so two concurrent parsings can never pick the same path.
+                                match OpenOptions::new().write(true).create_new(true).open(&p).await
+                                {
+                                    Ok(file) => break (file, p),
+                                    Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                                        p = Path::join(
+                                            &options.temporary_dir,
+                                            format!("{target_file_name}-{i}"),
+                                        );
 
-                                            if sum_c > field.size_limit {
-                                                try_delete(&target_path);
-
-                                                output_err = Some(
-                                                    MultipartFormDataError::DataTooLargeError(
-                                                        field_name,
-                                                    ),
-                                                );
-
-                                                break 'outer;
-                                            }
-
-                                            match file.write_all(bytes.as_ref()).await {
-                                                Ok(_) => (),
-                                                Err(err) => {
-                                                    try_delete(&target_path);
-
-                                                    output_err = Some(err.into());
-
-                                                    break 'outer;
-                                                },
-                                            }
-                                        },
-                                        None => break,
+                                        i += 1;
                                     },
                                     Err(err) => {
+                                        output_err = Some(err.into());
+
+                                        break 'outer;
+                                    },
+                                }
+                            }
+                        };
+
+                        let mut sum_c = 0u64;
+
+                        loop {
+                            match entry.chunk().await {
+                                Ok(Some(bytes)) => {
+                                    sum_c += bytes.len() as u64;
+
+                                    if sum_c > field.size_limit {
+                                        try_delete(&target_path);
+
+                                        output_err = Some(
+                                            MultipartFormDataError::DataTooLargeError(field_name),
+                                        );
+
+                                        break 'outer;
+                                    }
+
+                                    if let Err(err) = file.write_all(bytes.as_ref()).await {
                                         try_delete(&target_path);
 
                                         output_err = Some(err.into());
 
                                         break 'outer;
-                                    },
-                                }
-                            }
-
-                            if might_be_empty_file_input_in_html {
-                                if sum_c == 0 {
-                                    // This file might be from an empty file input in the HTML form, so ignore it.
+                                    }
+                                },
+                                Ok(None) => break,
+                                Err(err) => {
                                     try_delete(&target_path);
 
-                                    output_err = None;
-                                    continue;
-                                } else if output_err.is_some() {
-                                    try_delete(&target_path);
+                                    output_err = Some(err.into());
 
                                     break 'outer;
-                                }
+                                },
                             }
+                        }
 
-                            let file_name = entry.file_name().map(String::from);
+                        if might_be_empty_file_input_in_html {
+                            if sum_c == 0 {
+                                // This file might be from an empty file input in the HTML form, so ignore it.
+                                try_delete(&target_path);
 
-                            let f = FileField {
-                                content_type: entry.content_type().cloned(),
-                                file_name,
-                                path: target_path,
-                            };
+                                output_err = None;
+                                continue;
+                            } else if output_err.is_some() {
+                                try_delete(&target_path);
 
-                            if let Some(fields) = files.get_mut(&field_name) {
-                                fields.push(f);
-                            } else {
-                                files.insert(field_name, vec![f]);
+                                break 'outer;
                             }
-                        },
-                        MultipartFormDataType::Raw => {
-                            let mut raw_buffer = Vec::new();
+                        }
 
-                            loop {
-                                match entry.chunk().await {
-                                    Ok(bytes) => match bytes {
-                                        Some(bytes) => {
-                                            if raw_buffer.len() as u64 + bytes.len() as u64
-                                                > field.size_limit
-                                            {
-                                                output_err = Some(
-                                                    MultipartFormDataError::DataTooLargeError(
-                                                        field_name,
-                                                    ),
-                                                );
+                        files.entry(field_name).or_default().push(FileField {
+                            content_type: entry.content_type().cloned(),
+                            file_name:    entry.file_name().map(String::from),
+                            path:         target_path,
+                        });
+                    },
+                    typ @ (MultipartFormDataType::Raw | MultipartFormDataType::Text) => {
+                        let mut buffer = Vec::new();
 
-                                                break 'outer;
-                                            }
-
-                                            raw_buffer.extend_from_slice(bytes.as_ref());
-                                        },
-                                        None => break,
-                                    },
-                                    Err(err) => {
-                                        output_err = Some(err.into());
+                        loop {
+                            match entry.chunk().await {
+                                Ok(Some(bytes)) => {
+                                    if buffer.len() as u64 + bytes.len() as u64 > field.size_limit {
+                                        output_err = Some(
+                                            MultipartFormDataError::DataTooLargeError(field_name),
+                                        );
 
                                         break 'outer;
-                                    },
-                                }
-                            }
+                                    }
 
-                            if might_be_empty_file_input_in_html {
-                                if raw_buffer.is_empty() {
-                                    // This file might be from an empty file input in the HTML form, so ignore it.
-                                    output_err = None;
-                                    continue;
-                                } else if output_err.is_some() {
+                                    buffer.extend_from_slice(bytes.as_ref());
+                                },
+                                Ok(None) => break,
+                                Err(err) => {
+                                    output_err = Some(err.into());
+
                                     break 'outer;
-                                }
+                                },
                             }
+                        }
 
-                            let file_name = entry.file_name().map(String::from);
-
-                            let f = RawField {
-                                content_type: entry.content_type().cloned(),
-                                file_name,
-                                raw: raw_buffer,
-                            };
-
-                            if let Some(fields) = raw.get_mut(&field_name) {
-                                fields.push(f);
-                            } else {
-                                raw.insert(field_name, vec![f]);
+                        if might_be_empty_file_input_in_html {
+                            if buffer.is_empty() {
+                                // This file might be from an empty file input in the HTML form, so ignore it.
+                                output_err = None;
+                                continue;
+                            } else if output_err.is_some() {
+                                break 'outer;
                             }
-                        },
-                        MultipartFormDataType::Text => {
-                            let mut text_buffer = Vec::new();
+                        }
 
-                            loop {
-                                match entry.chunk().await {
-                                    Ok(bytes) => match bytes {
-                                        Some(bytes) => {
-                                            if text_buffer.len() as u64 + bytes.len() as u64
-                                                > field.size_limit
-                                            {
-                                                output_err = Some(
-                                                    MultipartFormDataError::DataTooLargeError(
-                                                        field_name,
-                                                    ),
-                                                );
+                        let content_type = entry.content_type().cloned();
+                        let file_name = entry.file_name().map(String::from);
 
-                                                break 'outer;
-                                            }
-
-                                            text_buffer.extend_from_slice(bytes.as_ref());
-                                        },
-                                        None => break,
-                                    },
-                                    Err(err) => {
-                                        output_err = Some(err.into());
-
-                                        break 'outer;
-                                    },
-                                }
-                            }
-
-                            if might_be_empty_file_input_in_html {
-                                if text_buffer.is_empty() {
-                                    // This file might be from an empty file input in the HTML form, so ignore it.
-                                    output_err = None;
-                                    continue;
-                                } else if output_err.is_some() {
-                                    break 'outer;
-                                }
-                            }
-
-                            let text = match String::from_utf8(text_buffer) {
+                        if typ == MultipartFormDataType::Text {
+                            let text = match String::from_utf8(buffer) {
                                 Ok(s) => s,
                                 Err(err) => {
                                     output_err = Some(err.into());
@@ -330,43 +273,38 @@ impl MultipartFormData {
                                 },
                             };
 
-                            let file_name = entry.file_name().map(String::from);
-
-                            let f = TextField {
-                                content_type: entry.content_type().cloned(),
+                            texts.entry(field_name).or_default().push(TextField {
+                                content_type,
                                 file_name,
                                 text,
-                            };
-
-                            if let Some(fields) = texts.get_mut(&field_name) {
-                                fields.push(f);
-                            } else {
-                                texts.insert(field_name, vec![f]);
-                            }
-                        },
-                    }
-
-                    field.repetition.decrease_check_is_over()
-                };
-
-                if drop_field {
-                    options.allowed_fields.remove(vi);
+                            });
+                        } else {
+                            raw.entry(field_name).or_default().push(RawField {
+                                content_type,
+                                file_name,
+                                raw: buffer,
+                            });
+                        }
+                    },
                 }
+
+                field.repetition.decrease_check_is_over()
+            };
+
+            if drop_field {
+                options.allowed_fields.remove(vi);
             }
         }
 
         if let Some(err) = output_err {
-            for (_, fields) in files {
+            for fields in files.into_values() {
                 for f in fields {
                     try_delete(f.path);
                 }
             }
 
-            loop {
-                if multipart.next_field().await?.is_none() {
-                    break;
-                }
-            }
+            // Drain the rest of the stream so that the connection can be reused. Any error here is ignored to keep the original one.
+            while let Ok(Some(_)) = multipart.next_field().await {}
 
             Err(err)
         } else {
@@ -394,5 +332,5 @@ impl Drop for MultipartFormData {
 
 #[inline]
 fn try_delete<P: AsRef<Path>>(path: P) {
-    if fs::remove_file(path.as_ref()).is_err() {}
+    let _ = fs::remove_file(path.as_ref());
 }

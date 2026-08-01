@@ -43,6 +43,8 @@ impl Repetition {
 
     #[inline]
     /// Create a `Repetition` instance for any fixed times.
+    ///
+    /// A `count` of `0` is invalid. In that case, a warning is printed to stderr and `1` is used instead.
     pub fn fixed(count: u32) -> Repetition {
         if count == 0 {
             eprintln!(

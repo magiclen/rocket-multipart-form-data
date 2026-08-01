@@ -1,6 +1,6 @@
 [package]
 name = "rocket-multipart-form-data"
-version = "0.10.7"
+version = "0.10.8"
 edition = "2024"
 rust-version = "1.89"
 authors = ["Magic Len <len@magiclen.org>"]

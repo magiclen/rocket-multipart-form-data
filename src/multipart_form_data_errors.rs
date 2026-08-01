@@ -63,4 +63,14 @@ impl Display for MultipartFormDataError {
     }
 }
 
-impl Error for MultipartFormDataError {}
+impl Error for MultipartFormDataError {
+    #[inline]
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            MultipartFormDataError::IOError(err) => Some(err),
+            MultipartFormDataError::MulterError(err) => Some(err),
+            MultipartFormDataError::FromUtf8Error(err) => Some(err),
+            _ => None,
+        }
+    }
+}
