@@ -5,7 +5,10 @@ use crate::MultipartFormDataField;
 /// Options for parsing multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormDataOptions<'a> {
-    /// The max number of bytes to read.
+    /// The maximum number of bytes to read from the complete multipart stream.
+    ///
+    /// This limit includes multipart headers and fields that are not allowed.
+    /// The default is `u64::MAX`, so applications should set a finite limit for untrusted input.
     pub max_data_bytes: u64,
     /// A path of directory where the uploaded files will be stored. It should be created before parsing.
     pub temporary_dir:  PathBuf,

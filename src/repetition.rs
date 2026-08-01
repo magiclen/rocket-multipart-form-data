@@ -62,6 +62,8 @@ impl Repetition {
 
     #[inline]
     /// Create a `Repetition` instance for infinite times.
+    ///
+    /// Set a finite `MultipartFormDataOptions::max_data_bytes` because every accepted occurrence is stored.
     pub fn infinite() -> Repetition {
         Repetition {
             counter: RepetitionCounter::Infinite

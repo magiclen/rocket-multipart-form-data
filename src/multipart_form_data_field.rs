@@ -14,7 +14,9 @@ pub struct MultipartFormDataField<'a> {
     pub field_name:   &'a str,
     /// The size limit for this field.
     pub size_limit:   u64,
-    /// To filter the content types. It supports stars.
+    /// Content type filters for this field.
+    ///
+    /// Wildcards are supported for the type and subtype, while parameters such as `charset` are ignored.
     pub content_type: Option<Vec<Mime>>,
     /// To define this `MultipartFormDataField` instance can be used how many times.
     pub repetition:   Repetition,
@@ -71,6 +73,8 @@ impl<'a> MultipartFormDataField<'a> {
     }
 
     /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
+    ///
+    /// Only the type and subtype are matched, while parameters such as `charset` are ignored.
     #[inline]
     pub fn content_type(mut self, content_type: Option<Mime>) -> MultipartFormDataField<'a> {
         match content_type {
@@ -88,6 +92,8 @@ impl<'a> MultipartFormDataField<'a> {
     }
 
     /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
+    ///
+    /// Only the type and subtype are matched, while parameters such as `charset` are ignored.
     #[inline]
     pub fn content_type_by_string<S: AsRef<str>>(
         mut self,

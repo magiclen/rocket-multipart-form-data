@@ -31,23 +31,19 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
     let mut multipart_form_data = match MultipartFormData::parse(content_type, data, options).await
     {
         Ok(multipart_form_data) => multipart_form_data,
-        Err(err) => {
-            match err {
-                MultipartFormDataError::DataTooLargeError(_) => {
-                    return Err("The file is too large.");
-                },
-                MultipartFormDataError::DataTypeError(_) => {
-                    return Err("The file is not an image.");
-                },
-                MultipartFormDataError::MulterError(multer::Error::IncompleteFieldData {
-                    ..
-                })
-                | MultipartFormDataError::MulterError(multer::Error::IncompleteHeaders) => {
-                    // may happen when we set the max_data_bytes limitation
-                    return Err("The request body seems too large.");
-                },
-                _ => panic!("{:?}", err),
-            }
+        Err(err) => match err {
+            MultipartFormDataError::DataTooLargeError(_) => {
+                return Err("The file is too large.");
+            },
+            MultipartFormDataError::DataTypeError(_) => {
+                return Err("The file is not an image.");
+            },
+            MultipartFormDataError::MulterError(multer::Error::StreamSizeExceeded {
+                ..
+            }) => {
+                return Err("The request body seems too large.");
+            },
+            _ => panic!("{:?}", err),
         },
     };
 

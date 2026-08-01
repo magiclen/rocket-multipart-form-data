@@ -1,14 +1,21 @@
-use std::{collections::HashMap, fs, io, path::Path, sync::Arc, time::SystemTime};
+use std::{
+    collections::HashMap,
+    fs, io,
+    path::{Path, PathBuf},
+    sync::Arc,
+    time::SystemTime,
+};
 
 use rocket::{
     Data,
     http::ContentType,
-    tokio::{fs::OpenOptions, io::AsyncWriteExt},
+    tokio::{fs::File, io::AsyncWriteExt, task},
 };
 
 use crate::{
     FileField, MultipartFormDataError, MultipartFormDataOptions, MultipartFormDataType, RawField,
-    TextField, mime, multer::Multipart,
+    TextField, mime,
+    multer::{Constraints, Multipart, SizeLimit},
 };
 
 /// Parsed multipart/form-data.
@@ -37,9 +44,15 @@ impl MultipartFormData {
 
         options.allowed_fields.sort_by_key(|e| e.field_name);
 
-        let stream = data.open(options.max_data_bytes.into());
+        let stream = data.open(options.max_data_bytes.saturating_add(1).into());
+        let constraints =
+            Constraints::new().size_limit(SizeLimit::new().whole_stream(options.max_data_bytes));
 
-        let mut multipart = Multipart::new(tokio_util::io::ReaderStream::new(stream), boundary);
+        let mut multipart = Multipart::with_constraints(
+            tokio_util::io::ReaderStream::new(stream),
+            boundary,
+            constraints,
+        );
 
         let mut files: HashMap<Arc<str>, Vec<FileField>> = HashMap::new();
         let mut raw: HashMap<Arc<str>, Vec<RawField>> = HashMap::new();
@@ -134,40 +147,15 @@ impl MultipartFormData {
 
                 match field.typ {
                     MultipartFormDataType::File => {
-                        let target_file_name = format!(
-                            "rs-{}",
-                            SystemTime::now()
-                                .duration_since(SystemTime::UNIX_EPOCH)
-                                .unwrap_or_default()
-                                .as_nanos()
-                        );
+                        let mut temporary_file =
+                            match TemporaryFile::create(options.temporary_dir.clone()).await {
+                                Ok(temporary_file) => temporary_file,
+                                Err(err) => {
+                                    output_err = Some(err.into());
 
-                        let (mut file, target_path) = {
-                            let mut p = Path::join(&options.temporary_dir, &target_file_name);
-
-                            let mut i = 1usize;
-
-                            loop {
-                                // `create_new` creates the file atomically, so two concurrent parsings can never pick the same path.
-                                match OpenOptions::new().write(true).create_new(true).open(&p).await
-                                {
-                                    Ok(file) => break (file, p),
-                                    Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
-                                        p = Path::join(
-                                            &options.temporary_dir,
-                                            format!("{target_file_name}-{i}"),
-                                        );
-
-                                        i += 1;
-                                    },
-                                    Err(err) => {
-                                        output_err = Some(err.into());
-
-                                        break 'outer;
-                                    },
-                                }
-                            }
-                        };
+                                    break 'outer;
+                                },
+                            };
 
                         let mut sum_c = 0u64;
 
@@ -177,8 +165,6 @@ impl MultipartFormData {
                                     sum_c += bytes.len() as u64;
 
                                     if sum_c > field.size_limit {
-                                        try_delete(&target_path);
-
                                         output_err = Some(
                                             MultipartFormDataError::DataTooLargeError(field_name),
                                         );
@@ -186,9 +172,8 @@ impl MultipartFormData {
                                         break 'outer;
                                     }
 
-                                    if let Err(err) = file.write_all(bytes.as_ref()).await {
-                                        try_delete(&target_path);
-
+                                    if let Err(err) = temporary_file.write_all(bytes.as_ref()).await
+                                    {
                                         output_err = Some(err.into());
 
                                         break 'outer;
@@ -196,8 +181,6 @@ impl MultipartFormData {
                                 },
                                 Ok(None) => break,
                                 Err(err) => {
-                                    try_delete(&target_path);
-
                                     output_err = Some(err.into());
 
                                     break 'outer;
@@ -208,16 +191,21 @@ impl MultipartFormData {
                         if might_be_empty_file_input_in_html {
                             if sum_c == 0 {
                                 // This file might be from an empty file input in the HTML form, so ignore it.
-                                try_delete(&target_path);
-
                                 output_err = None;
                                 continue;
                             } else if output_err.is_some() {
-                                try_delete(&target_path);
-
                                 break 'outer;
                             }
                         }
+
+                        let target_path = match temporary_file.keep().await {
+                            Ok(target_path) => target_path,
+                            Err(err) => {
+                                output_err = Some(err.into());
+
+                                break 'outer;
+                            },
+                        };
 
                         files.entry(field_name).or_default().push(FileField {
                             content_type: entry.content_type().cloned(),
@@ -313,6 +301,76 @@ impl MultipartFormData {
                 raw,
                 texts,
             })
+        }
+    }
+}
+
+struct TemporaryFile {
+    file: Option<File>,
+    path: Option<PathBuf>,
+}
+
+impl TemporaryFile {
+    async fn create(temporary_dir: PathBuf) -> io::Result<Self> {
+        task::spawn_blocking(move || {
+            let target_file_name = format!(
+                "rs-{}",
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_nanos()
+            );
+            let mut path = Path::join(&temporary_dir, &target_file_name);
+            let mut index = 1usize;
+
+            loop {
+                let mut options = fs::OpenOptions::new();
+
+                options.write(true).create_new(true);
+
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::OpenOptionsExt;
+
+                    options.mode(0o600);
+                }
+
+                match options.open(&path) {
+                    Ok(file) => {
+                        return Ok(TemporaryFile {
+                            file: Some(File::from_std(file)),
+                            path: Some(path),
+                        });
+                    },
+                    Err(err) if err.kind() == io::ErrorKind::AlreadyExists => {
+                        path = Path::join(&temporary_dir, format!("{target_file_name}-{index}"));
+                        index += 1;
+                    },
+                    Err(err) => return Err(err),
+                }
+            }
+        })
+        .await
+        .map_err(io::Error::other)?
+    }
+
+    async fn keep(mut self) -> io::Result<PathBuf> {
+        self.file.as_mut().unwrap().flush().await?;
+        self.file.take();
+        Ok(self.path.take().unwrap())
+    }
+
+    async fn write_all(&mut self, bytes: &[u8]) -> io::Result<()> {
+        self.file.as_mut().unwrap().write_all(bytes).await
+    }
+}
+
+impl Drop for TemporaryFile {
+    fn drop(&mut self) {
+        self.file.take();
+
+        if let Some(path) = self.path.take() {
+            try_delete(path);
         }
     }
 }

@@ -3,7 +3,7 @@ use std::{env, fs};
 use rocket::{Data, Route, http::ContentType, local::asynchronous::Client, post, routes};
 use rocket_multipart_form_data::{
     MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
-    Repetition, mime,
+    Repetition, mime, multer,
 };
 
 const BOUNDARY: &str = "TEST-BOUNDARY";
@@ -131,7 +131,7 @@ async fn file_route(content_type: &ContentType, data: Data<'_>) -> String {
         MultipartFormDataField::file("photo"),
     ]);
 
-    let (content, file_name, path) = {
+    let (content, file_name, path, permissions) = {
         let form = match MultipartFormData::parse(content_type, data, options).await {
             Ok(form) => form,
             Err(err) => return format!("ERROR: {err}"),
@@ -139,11 +139,31 @@ async fn file_route(content_type: &ContentType, data: Data<'_>) -> String {
 
         let field = &form.files.get("photo").unwrap()[0];
 
-        (fs::read(&field.path).unwrap(), field.file_name.clone().unwrap(), field.path.clone())
+        #[cfg(unix)]
+        let permissions = {
+            use std::os::unix::fs::PermissionsExt;
+
+            format!("{:o}", fs::metadata(&field.path).unwrap().permissions().mode() & 0o777)
+        };
+        #[cfg(not(unix))]
+        let permissions = String::from("unsupported");
+
+        (
+            fs::read(&field.path).unwrap(),
+            field.file_name.clone().unwrap(),
+            field.path.clone(),
+            permissions,
+        )
     };
 
     // `form` has been dropped, so its temporary file should have been removed.
-    format!("{}/{}/{}", String::from_utf8(content).unwrap(), file_name, path.exists())
+    format!(
+        "{}/{}/{}/{}",
+        String::from_utf8(content).unwrap(),
+        file_name,
+        permissions,
+        path.exists()
+    )
 }
 
 #[rocket::async_test]
@@ -158,7 +178,50 @@ async fn parse_file_field() {
     }])
     .await;
 
-    assert_eq!("Hello world!/photo.png/false", output);
+    #[cfg(unix)]
+    assert_eq!("Hello world!/photo.png/600/false", output);
+    #[cfg(not(unix))]
+    assert_eq!("Hello world!/photo.png/unsupported/false", output);
+}
+
+#[post("/empty-file-input", data = "<data>")]
+async fn empty_file_input_route(content_type: &ContentType, data: Data<'_>) -> String {
+    let temporary_dir = env::temp_dir().join("rocket-multipart-form-data-empty-file-input");
+
+    fs::create_dir_all(&temporary_dir).unwrap();
+
+    let options = MultipartFormDataOptions {
+        temporary_dir: temporary_dir.clone(),
+        allowed_fields: vec![
+            MultipartFormDataField::file("photo").content_type(Some(mime::IMAGE_STAR)),
+        ],
+        ..MultipartFormDataOptions::default()
+    };
+
+    let result = MultipartFormData::parse(content_type, data, options).await;
+    let left_behind = fs::read_dir(&temporary_dir).unwrap().count();
+
+    fs::remove_dir_all(&temporary_dir).unwrap();
+
+    match result {
+        Ok(form) => format!("{}/{left_behind}", form.files.contains_key("photo")),
+        Err(err) => format!("ERROR: {err}/{left_behind}"),
+    }
+}
+
+#[rocket::async_test]
+async fn an_empty_browser_file_input_is_ignored_without_leaving_a_temporary_file() {
+    let client = create_client(routes![empty_file_input_route]).await;
+
+    let output = post(&client, "/empty-file-input", &[Part {
+        name:         "photo",
+        file_name:    Some(""),
+        content_type: Some("application/octet-stream"),
+        body:         b"",
+    }])
+    .await;
+
+    assert_eq!("false/0", output);
 }
 
 #[post("/content-type", data = "<data>")]
@@ -246,6 +309,45 @@ async fn repetition_limits_the_collected_occurrences() {
     assert_eq!("a@magiclen.org,b@magiclen.org,c@magiclen.org", output);
 }
 
+#[post("/duplicate-repetition", data = "<data>")]
+async fn duplicate_repetition_route(content_type: &ContentType, data: Data<'_>) -> String {
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
+        MultipartFormDataField::text("email").repetition(Repetition::fixed(2)),
+        MultipartFormDataField::text("email"),
+    ]);
+
+    let mut form = match MultipartFormData::parse(content_type, data, options).await {
+        Ok(form) => form,
+        Err(err) => return format!("ERROR: {err}"),
+    };
+
+    let fields = form.texts.remove("email").unwrap();
+
+    fields.into_iter().map(|field| field.text).collect::<Vec<String>>().join(",")
+}
+
+#[rocket::async_test]
+async fn repetitions_for_duplicate_field_definitions_add_up() {
+    let client = create_client(routes![duplicate_repetition_route]).await;
+
+    let email = |body: &'static str| Part {
+        name:         "email",
+        file_name:    None,
+        content_type: None,
+        body:         body.as_bytes(),
+    };
+
+    let output = post(&client, "/duplicate-repetition", &[
+        email("a@magiclen.org"),
+        email("b@magiclen.org"),
+        email("c@magiclen.org"),
+        email("d@magiclen.org"),
+    ])
+    .await;
+
+    assert_eq!("a@magiclen.org,b@magiclen.org,c@magiclen.org", output);
+}
+
 #[post("/size-limit", data = "<data>")]
 async fn size_limit_route(content_type: &ContentType, data: Data<'_>) -> String {
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
@@ -312,9 +414,9 @@ async fn a_field_out_of_the_allowed_fields_is_ignored() {
     assert_eq!("Magic Len/0", output);
 }
 
-#[post("/truncated", data = "<data>")]
-async fn truncated_route(content_type: &ContentType, data: Data<'_>) -> String {
-    let temporary_dir = env::temp_dir().join("rocket-multipart-form-data-truncated");
+#[post("/max-data-bytes", data = "<data>")]
+async fn max_data_bytes_route(content_type: &ContentType, data: Data<'_>) -> String {
+    let temporary_dir = env::temp_dir().join("rocket-multipart-form-data-max-data-bytes");
 
     fs::create_dir_all(&temporary_dir).unwrap();
 
@@ -332,20 +434,21 @@ async fn truncated_route(content_type: &ContentType, data: Data<'_>) -> String {
 
     match result {
         Ok(_) => format!("ok/{left_behind}"),
-        Err(MultipartFormDataError::MulterError(_)) => format!("multer-error/{left_behind}"),
+        Err(MultipartFormDataError::MulterError(multer::Error::StreamSizeExceeded {
+            limit,
+        })) => format!("stream-size-exceeded-{limit}/{left_behind}"),
         Err(err) => format!("other-error: {err}/{left_behind}"),
     }
 }
 
 #[rocket::async_test]
-async fn a_truncated_stream_leaves_no_temporary_file_behind() {
-    let client = create_client(routes![truncated_route]).await;
+async fn max_data_bytes_reports_stream_size_exceeded_and_leaves_no_temporary_file() {
+    let client = create_client(routes![max_data_bytes_route]).await;
 
-    // The second part has a huge header line, so `max_data_bytes` cuts the stream while its headers are being read.
-    // By then the first part has already been written to a temporary file.
+    // The second part has a huge header line, so the complete multipart stream exceeds `max_data_bytes`.
     let long_name = "x".repeat(8192);
 
-    let output = post(&client, "/truncated", &[
+    let output = post(&client, "/max-data-bytes", &[
         Part {
             name:         "photo",
             file_name:    Some("photo.png"),
@@ -361,5 +464,5 @@ async fn a_truncated_stream_leaves_no_temporary_file_behind() {
     ])
     .await;
 
-    assert_eq!("multer-error/0", output);
+    assert_eq!("stream-size-exceeded-1024/0", output);
 }
