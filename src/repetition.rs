@@ -34,37 +34,31 @@ pub struct Repetition {
 
 impl Repetition {
     #[inline]
+    #[must_use]
     /// Create a `Repetition` instance for only one time.
-    pub fn new() -> Repetition {
+    pub const fn new() -> Repetition {
         Repetition {
             counter: RepetitionCounter::Fixed(1)
         }
     }
 
     #[inline]
+    #[must_use]
     /// Create a `Repetition` instance for any fixed times.
     ///
-    /// A `count` of `0` is invalid. In that case, a warning is printed to stderr and `1` is used instead.
-    pub fn fixed(count: u32) -> Repetition {
-        if count == 0 {
-            eprintln!(
-                "The count of fixed repetition for a `MultipartFormDataField` instance should be \
-                 bigger than 0. Use 1 instead."
-            );
-
-            Repetition::new()
-        } else {
-            Repetition {
-                counter: RepetitionCounter::Fixed(count)
-            }
+    /// A `count` of `0` is invalid and is silently treated as `1`.
+    pub const fn fixed(count: u32) -> Repetition {
+        Repetition {
+            counter: RepetitionCounter::Fixed(if count == 0 { 1 } else { count })
         }
     }
 
     #[inline]
+    #[must_use]
     /// Create a `Repetition` instance for infinite times.
     ///
     /// Set a finite `MultipartFormDataOptions::max_data_bytes` because every accepted occurrence is stored.
-    pub fn infinite() -> Repetition {
+    pub const fn infinite() -> Repetition {
         Repetition {
             counter: RepetitionCounter::Infinite
         }

@@ -270,6 +270,21 @@ async fn content_type_filter_rejects_a_mismatch() {
     assert_eq!("ERROR: The data type of field `photo` is incorrect.", output);
 }
 
+#[rocket::async_test]
+async fn content_type_filter_rejects_a_field_without_a_content_type_header() {
+    let client = create_client(routes![content_type_route]).await;
+
+    let output = post(&client, "/content-type", &[Part {
+        name:         "photo",
+        file_name:    Some("photo.png"),
+        content_type: None,
+        body:         "PNG".as_bytes(),
+    }])
+    .await;
+
+    assert_eq!("ERROR: The data type of field `photo` is incorrect.", output);
+}
+
 #[post("/repetition", data = "<data>")]
 async fn repetition_route(content_type: &ContentType, data: Data<'_>) -> String {
     let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
@@ -346,6 +361,101 @@ async fn repetitions_for_duplicate_field_definitions_add_up() {
     .await;
 
     assert_eq!("a@magiclen.org,b@magiclen.org,c@magiclen.org", output);
+}
+
+#[post("/infinite-repetition", data = "<data>")]
+async fn infinite_repetition_route(content_type: &ContentType, data: Data<'_>) -> String {
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
+        MultipartFormDataField::text("email").repetition(Repetition::infinite()),
+    ]);
+
+    let mut form = match MultipartFormData::parse(content_type, data, options).await {
+        Ok(form) => form,
+        Err(err) => return format!("ERROR: {err}"),
+    };
+
+    let fields = form.texts.remove("email").unwrap();
+
+    fields.into_iter().map(|field| field.text).collect::<Vec<String>>().join(",")
+}
+
+#[rocket::async_test]
+async fn infinite_repetition_collects_every_occurrence() {
+    let client = create_client(routes![infinite_repetition_route]).await;
+
+    let email = |body: &'static str| Part {
+        name:         "email",
+        file_name:    None,
+        content_type: None,
+        body:         body.as_bytes(),
+    };
+
+    let output = post(&client, "/infinite-repetition", &[
+        email("a@magiclen.org"),
+        email("b@magiclen.org"),
+        email("c@magiclen.org"),
+        email("d@magiclen.org"),
+        email("e@magiclen.org"),
+    ])
+    .await;
+
+    assert_eq!(
+        "a@magiclen.org,b@magiclen.org,c@magiclen.org,d@magiclen.org,e@magiclen.org",
+        output
+    );
+}
+
+#[post("/mixed", data = "<data>")]
+async fn mixed_route(content_type: &ContentType, data: Data<'_>) -> String {
+    let options = MultipartFormDataOptions::with_multipart_form_data_fields(vec![
+        MultipartFormDataField::text("name"),
+        MultipartFormDataField::raw("fingerprint"),
+        MultipartFormDataField::file("photo"),
+    ]);
+
+    let mut form = match MultipartFormData::parse(content_type, data, options).await {
+        Ok(form) => form,
+        Err(err) => return format!("ERROR: {err}"),
+    };
+
+    let name = form.texts.remove("name").unwrap().remove(0).text;
+    let fingerprint = form.raw.remove("fingerprint").unwrap().remove(0).raw;
+    let photo = fs::read(&form.files.get("photo").unwrap()[0].path).unwrap();
+
+    format!(
+        "{name}/{}/{}",
+        fingerprint.iter().map(|b| format!("{b:02X}")).collect::<String>(),
+        String::from_utf8(photo).unwrap()
+    )
+}
+
+#[rocket::async_test]
+async fn mixed_field_types_in_one_request() {
+    let client = create_client(routes![mixed_route]).await;
+
+    let output = post(&client, "/mixed", &[
+        Part {
+            name:         "name",
+            file_name:    None,
+            content_type: None,
+            body:         "Magic Len".as_bytes(),
+        },
+        Part {
+            name:         "fingerprint",
+            file_name:    None,
+            content_type: Some("application/octet-stream"),
+            body:         &[0x00, 0xFF],
+        },
+        Part {
+            name:         "photo",
+            file_name:    Some("photo.png"),
+            content_type: Some("image/png"),
+            body:         "Hello world!".as_bytes(),
+        },
+    ])
+    .await;
+
+    assert_eq!("Magic Len/00FF/Hello world!", output);
 }
 
 #[post("/size-limit", data = "<data>")]

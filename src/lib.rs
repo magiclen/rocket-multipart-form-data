@@ -81,8 +81,10 @@ async fn index(content_type: &ContentType, data: Data<'_>) -> &'static str {
 Also see `examples`.
  */
 
-pub extern crate mime;
-pub extern crate multer;
+#![warn(missing_docs)]
+
+pub use mime;
+pub use multer;
 
 mod fields;
 mod multipart_form_data;

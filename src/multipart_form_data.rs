@@ -9,7 +9,11 @@ use std::{
 use rocket::{
     Data,
     http::ContentType,
-    tokio::{fs::File, io::AsyncWriteExt, task},
+    tokio::{
+        fs::File,
+        io::{AsyncWriteExt, BufWriter},
+        task,
+    },
 };
 
 use crate::{
@@ -18,11 +22,19 @@ use crate::{
     multer::{Constraints, Multipart, SizeLimit},
 };
 
+/// The buffer size for reading the HTTP body.
+const READ_BUFFER_SIZE: usize = 64 * 1024;
+/// The buffer size for writing a temporary file, in order to reduce the number of blocking tasks.
+const WRITE_BUFFER_SIZE: usize = 64 * 1024;
+
 /// Parsed multipart/form-data.
 #[derive(Debug)]
 pub struct MultipartFormData {
+    /// File fields, keyed by the field name.
     pub files: HashMap<Arc<str>, Vec<FileField>>,
+    /// Raw fields, keyed by the field name.
     pub raw:   HashMap<Arc<str>, Vec<RawField>>,
+    /// Text fields, keyed by the field name.
     pub texts: HashMap<Arc<str>, Vec<TextField>>,
 }
 
@@ -49,10 +61,13 @@ impl MultipartFormData {
             Constraints::new().size_limit(SizeLimit::new().whole_stream(options.max_data_bytes));
 
         let mut multipart = Multipart::with_constraints(
-            tokio_util::io::ReaderStream::new(stream),
+            tokio_util::io::ReaderStream::with_capacity(stream, READ_BUFFER_SIZE),
             boundary,
             constraints,
         );
+
+        // Create the shared path once so that every file field only needs to bump a reference count.
+        let temporary_dir: Arc<Path> = Arc::from(options.temporary_dir.as_path());
 
         let mut files: HashMap<Arc<str>, Vec<FileField>> = HashMap::new();
         let mut raw: HashMap<Arc<str>, Vec<RawField>> = HashMap::new();
@@ -148,7 +163,7 @@ impl MultipartFormData {
                 match field.typ {
                     MultipartFormDataType::File => {
                         let mut temporary_file =
-                            match TemporaryFile::create(options.temporary_dir.clone()).await {
+                            match TemporaryFile::create(temporary_dir.clone()).await {
                                 Ok(temporary_file) => temporary_file,
                                 Err(err) => {
                                     output_err = Some(err.into());
@@ -306,12 +321,12 @@ impl MultipartFormData {
 }
 
 struct TemporaryFile {
-    file: Option<File>,
+    file: Option<BufWriter<File>>,
     path: Option<PathBuf>,
 }
 
 impl TemporaryFile {
-    async fn create(temporary_dir: PathBuf) -> io::Result<Self> {
+    async fn create(temporary_dir: Arc<Path>) -> io::Result<Self> {
         task::spawn_blocking(move || {
             let target_file_name = format!(
                 "rs-{}",
@@ -338,7 +353,10 @@ impl TemporaryFile {
                 match options.open(&path) {
                     Ok(file) => {
                         return Ok(TemporaryFile {
-                            file: Some(File::from_std(file)),
+                            file: Some(BufWriter::with_capacity(
+                                WRITE_BUFFER_SIZE,
+                                File::from_std(file),
+                            )),
                             path: Some(path),
                         });
                     },

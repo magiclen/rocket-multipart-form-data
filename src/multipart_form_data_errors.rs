@@ -8,14 +8,22 @@ use std::{
 
 use crate::multer;
 
+/// Errors which may occur while parsing multipart/form-data.
 #[derive(Debug)]
 pub enum MultipartFormDataError {
+    /// The content type of the request is not `multipart/form-data`.
     NotFormDataError,
+    /// The content type of the request has no `boundary` parameter.
     BoundaryNotFoundError,
+    /// A temporary file cannot be created or written.
     IOError(io::Error),
+    /// The multipart stream is malformed, or one of the limits of `multer` is exceeded.
     MulterError(multer::Error),
+    /// The data of a text field is not valid UTF-8.
     FromUtf8Error(FromUtf8Error),
+    /// The data of the field exceeds its `size_limit`.
     DataTooLargeError(Arc<str>),
+    /// The content type of the field does not match any of its content type filters.
     DataTypeError(Arc<str>),
 }
 
@@ -54,10 +62,10 @@ impl Display for MultipartFormDataError {
             MultipartFormDataError::MulterError(err) => Display::fmt(err, f),
             MultipartFormDataError::FromUtf8Error(err) => Display::fmt(err, f),
             MultipartFormDataError::DataTooLargeError(field) => {
-                f.write_fmt(format_args!("The data of field `{}` is too large.", field))
+                write!(f, "The data of field `{field}` is too large.")
             },
             MultipartFormDataError::DataTypeError(field) => {
-                f.write_fmt(format_args!("The data type of field `{}` is incorrect.", field))
+                write!(f, "The data type of field `{field}` is incorrect.")
             },
         }
     }

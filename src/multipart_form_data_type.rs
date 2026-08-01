@@ -1,3 +1,4 @@
+/// How the data of a field is stored after parsing.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
 pub enum MultipartFormDataType {
     /// Stored the parsed data as a string.

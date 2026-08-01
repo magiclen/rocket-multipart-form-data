@@ -17,6 +17,7 @@ pub struct MultipartFormDataField<'a> {
     /// Content type filters for this field.
     ///
     /// Wildcards are supported for the type and subtype, while parameters such as `charset` are ignored.
+    /// A field without a `Content-Type` header never matches any filter.
     pub content_type: Option<Vec<Mime>>,
     /// To define this `MultipartFormDataField` instance can be used how many times.
     pub repetition:   Repetition,
@@ -25,6 +26,7 @@ pub struct MultipartFormDataField<'a> {
 impl<'a> MultipartFormDataField<'a> {
     /// Create a text field, the default size_limit is 1 MiB.
     #[inline]
+    #[must_use]
     pub fn text<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::Text,
@@ -36,13 +38,17 @@ impl<'a> MultipartFormDataField<'a> {
     }
 
     /// Create a raw field, the default size_limit is 1 MiB.
+    ///
+    /// An alias of [`MultipartFormDataField::raw`].
     #[inline]
+    #[must_use]
     pub fn bytes<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         Self::raw(field_name.as_ref())
     }
 
     /// Create a raw field, the default size_limit is 1 MiB.
     #[inline]
+    #[must_use]
     pub fn raw<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::Raw,
@@ -55,6 +61,7 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Create a file field, the default size_limit is 8 MiB.
     #[inline]
+    #[must_use]
     pub fn file<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::File,
@@ -67,6 +74,7 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Set the size_limit for this field.
     #[inline]
+    #[must_use]
     pub fn size_limit(mut self, size_limit: u64) -> MultipartFormDataField<'a> {
         self.size_limit = size_limit;
         self
@@ -75,7 +83,11 @@ impl<'a> MultipartFormDataField<'a> {
     /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
     ///
     /// Only the type and subtype are matched, while parameters such as `charset` are ignored.
+    /// A field without a `Content-Type` header never matches any filter.
+    ///
+    /// Passing `None` removes all the filters added so far.
     #[inline]
+    #[must_use]
     pub fn content_type(mut self, content_type: Option<Mime>) -> MultipartFormDataField<'a> {
         match content_type {
             Some(content_type) => match self.content_type.as_mut() {
@@ -94,6 +106,9 @@ impl<'a> MultipartFormDataField<'a> {
     /// Add a content type filter for this field. This method can be used multiple times to use multiple content type filters.
     ///
     /// Only the type and subtype are matched, while parameters such as `charset` are ignored.
+    /// A field without a `Content-Type` header never matches any filter.
+    ///
+    /// Passing `None` removes all the filters added so far.
     #[inline]
     pub fn content_type_by_string<S: AsRef<str>>(
         mut self,
@@ -118,6 +133,7 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Set the repetition for this field.
     #[inline]
+    #[must_use]
     pub fn repetition(mut self, repetition: Repetition) -> MultipartFormDataField<'a> {
         self.repetition = repetition;
         self
