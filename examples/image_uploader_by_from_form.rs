@@ -25,17 +25,16 @@ static_response_handler! {
 }
 
 #[post("/upload", data = "<data>")]
-fn upload<'r>(
+async fn upload<'r>(
     data: Form<Contextual<'r, MultipartFormData<'r>>>,
-) -> Result<RawResponsePro<'r>, &'static str> {
+) -> Result<RawResponsePro<'r>, String> {
     match data.into_inner().value {
         Some(data) => {
             let image_file = data.image;
-            let file_name = image_file.name().unwrap_or("Image").to_string();
 
-            Ok(RawResponsePro::from_temp_file(image_file, Some(file_name), None))
+            RawResponsePro::from_temp_file(image_file).await.map_err(|error| error.to_string())
         },
-        None => Err("Incorrect."),
+        None => Err(String::from("Incorrect.")),
     }
 }
 

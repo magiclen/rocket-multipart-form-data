@@ -1,14 +1,14 @@
 use std::{collections::HashMap, fs, path::Path, sync::Arc, time::SystemTime};
 
 use rocket::{
+    Data,
     http::ContentType,
     tokio::{fs::File, io::AsyncWriteExt},
-    Data,
 };
 
 use crate::{
-    mime, multer::Multipart, FileField, MultipartFormDataError, MultipartFormDataOptions,
-    MultipartFormDataType, RawField, TextField,
+    FileField, MultipartFormDataError, MultipartFormDataOptions, MultipartFormDataType, RawField,
+    TextField, mime, multer::Multipart,
 };
 
 /// Parsed multipart/form-data.
@@ -66,11 +66,11 @@ impl MultipartFormData {
                     // The HTTP request body of an empty file input in a HTML form sent by web browsers:
                     // Content-Disposition: form-data; name="???"; filename=""
                     // Content-Type: application/octet-stream
-                    if let Some(filename) = entry.file_name() {
-                        if filename.is_empty() {
-                            // No need to check the MIME type. It's not practical.
-                            might_be_empty_file_input_in_html = true;
-                        }
+                    if let Some(filename) = entry.file_name()
+                        && filename.is_empty()
+                    {
+                        // No need to check the MIME type. It's not practical.
+                        might_be_empty_file_input_in_html = true;
                     }
 
                     // Whether to check content type
@@ -136,7 +136,7 @@ impl MultipartFormData {
                                 while p.exists() {
                                     p = Path::join(
                                         &options.temporary_dir,
-                                        format!("{}-{}", &target_file_name, i),
+                                        format!("{}-{}", target_file_name, i),
                                     );
 
                                     i += 1;

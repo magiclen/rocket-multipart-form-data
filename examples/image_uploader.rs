@@ -4,10 +4,10 @@ extern crate rocket_include_static_resources;
 #[macro_use]
 extern crate rocket;
 
-use rocket::{http::ContentType, Data};
+use rocket::{Data, http::ContentType};
 use rocket_multipart_form_data::{
-    mime, multer, MultipartFormData, MultipartFormDataError, MultipartFormDataField,
-    MultipartFormDataOptions,
+    MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
+    mime, multer,
 };
 use rocket_raw_response::RawResponse;
 
@@ -19,10 +19,12 @@ static_response_handler! {
 async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawResponse, &'static str> {
     let options = MultipartFormDataOptions {
         max_data_bytes: 33 * 1024 * 1024,
-        allowed_fields: vec![MultipartFormDataField::raw("image")
-            .size_limit(32 * 1024 * 1024)
-            .content_type_by_string(Some(mime::IMAGE_STAR))
-            .unwrap()],
+        allowed_fields: vec![
+            MultipartFormDataField::raw("image")
+                .size_limit(32 * 1024 * 1024)
+                .content_type_by_string(Some(mime::IMAGE_STAR))
+                .unwrap(),
+        ],
         ..MultipartFormDataOptions::default()
     };
 
@@ -40,9 +42,7 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
                 MultipartFormDataError::MulterError(multer::Error::IncompleteFieldData {
                     ..
                 })
-                | MultipartFormDataError::MulterError(multer::Error::IncompleteHeaders {
-                    ..
-                }) => {
+                | MultipartFormDataError::MulterError(multer::Error::IncompleteHeaders) => {
                     // may happen when we set the max_data_bytes limitation
                     return Err("The request body seems too large.");
                 },
@@ -61,7 +61,11 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
             let file_name = raw.file_name.unwrap_or_else(|| "Image".to_string());
             let data = raw.raw;
 
-            Ok(RawResponse::from_vec(data, Some(file_name), content_type))
+            let res = RawResponse::from_vec(data).file_name(file_name);
+
+            let res = if let Some(mime) = content_type { res.content_type(mime) } else { res };
+
+            Ok(res)
         },
         None => Err("Please input a file."),
     }

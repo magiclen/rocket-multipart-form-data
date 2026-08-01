@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use crate::{mime::Mime, MultipartFormDataType, Repetition};
+use crate::{MultipartFormDataType, Repetition, mime::Mime};
 
 const DEFAULT_IN_MEMORY_DATA_LIMIT: u64 = 1024 * 1024;
 const DEFAULT_FILE_DATA_LIMIT: u64 = 8 * 1024 * 1024;
@@ -23,7 +23,7 @@ pub struct MultipartFormDataField<'a> {
 impl<'a> MultipartFormDataField<'a> {
     /// Create a text field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn text<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
+    pub fn text<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::Text,
             field_name:   field_name.as_ref(),
@@ -35,13 +35,13 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Create a raw field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn bytes<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
+    pub fn bytes<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         Self::raw(field_name.as_ref())
     }
 
     /// Create a raw field, the default size_limit is 1 MiB.
     #[inline]
-    pub fn raw<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
+    pub fn raw<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::Raw,
             field_name:   field_name.as_ref(),
@@ -53,7 +53,7 @@ impl<'a> MultipartFormDataField<'a> {
 
     /// Create a file field, the default size_limit is 8 MiB.
     #[inline]
-    pub fn file<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField {
+    pub fn file<S: ?Sized + AsRef<str>>(field_name: &S) -> MultipartFormDataField<'_> {
         MultipartFormDataField {
             typ:          MultipartFormDataType::File,
             field_name:   field_name.as_ref(),
