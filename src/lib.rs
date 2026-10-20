@@ -18,7 +18,7 @@ async fn index(content_type: &ContentType, data: Data<'_>) -> &'static str {
     let options = MultipartFormDataOptions {
         max_data_bytes: 10 * 1024 * 1024,
         allowed_fields: vec![
-            MultipartFormDataField::file("photo").content_type_by_string(Some(mime::IMAGE_STAR)).unwrap(),
+            MultipartFormDataField::file("photo").content_type(Some(mime::IMAGE_STAR)),
             MultipartFormDataField::raw("fingerprint").size_limit(4096),
             MultipartFormDataField::text("name"),
             MultipartFormDataField::text("email").repetition(Repetition::fixed(3)),

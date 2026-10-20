@@ -1,10 +1,11 @@
-use std::{env, fs};
+use std::fs;
 
 use rocket::{Data, Route, http::ContentType, local::asynchronous::Client, post, routes};
 use rocket_multipart_form_data::{
     MultipartFormData, MultipartFormDataError, MultipartFormDataField, MultipartFormDataOptions,
     Repetition, mime, multer,
 };
+use tempfile::tempdir;
 
 const BOUNDARY: &str = "TEST-BOUNDARY";
 
@@ -186,12 +187,10 @@ async fn parse_file_field() {
 
 #[post("/empty-file-input", data = "<data>")]
 async fn empty_file_input_route(content_type: &ContentType, data: Data<'_>) -> String {
-    let temporary_dir = env::temp_dir().join("rocket-multipart-form-data-empty-file-input");
-
-    fs::create_dir_all(&temporary_dir).unwrap();
+    let temporary_dir = tempdir().unwrap();
 
     let options = MultipartFormDataOptions {
-        temporary_dir: temporary_dir.clone(),
+        temporary_dir: temporary_dir.path().to_path_buf(),
         allowed_fields: vec![
             MultipartFormDataField::file("photo").content_type(Some(mime::IMAGE_STAR)),
         ],
@@ -199,9 +198,7 @@ async fn empty_file_input_route(content_type: &ContentType, data: Data<'_>) -> S
     };
 
     let result = MultipartFormData::parse(content_type, data, options).await;
-    let left_behind = fs::read_dir(&temporary_dir).unwrap().count();
-
-    fs::remove_dir_all(&temporary_dir).unwrap();
+    let left_behind = fs::read_dir(temporary_dir.path()).unwrap().count();
 
     match result {
         Ok(form) => format!("{}/{left_behind}", form.files.contains_key("photo")),
@@ -526,21 +523,17 @@ async fn a_field_out_of_the_allowed_fields_is_ignored() {
 
 #[post("/max-data-bytes", data = "<data>")]
 async fn max_data_bytes_route(content_type: &ContentType, data: Data<'_>) -> String {
-    let temporary_dir = env::temp_dir().join("rocket-multipart-form-data-max-data-bytes");
-
-    fs::create_dir_all(&temporary_dir).unwrap();
+    let temporary_dir = tempdir().unwrap();
 
     let options = MultipartFormDataOptions {
         max_data_bytes: 1024,
-        temporary_dir:  temporary_dir.clone(),
+        temporary_dir:  temporary_dir.path().to_path_buf(),
         allowed_fields: vec![MultipartFormDataField::file("photo")],
     };
 
     let result = MultipartFormData::parse(content_type, data, options).await;
 
-    let left_behind = fs::read_dir(&temporary_dir).unwrap().count();
-
-    fs::remove_dir_all(&temporary_dir).unwrap();
+    let left_behind = fs::read_dir(temporary_dir.path()).unwrap().count();
 
     match result {
         Ok(_) => format!("ok/{left_behind}"),

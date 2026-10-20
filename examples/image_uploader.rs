@@ -22,8 +22,7 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
         allowed_fields: vec![
             MultipartFormDataField::raw("image")
                 .size_limit(32 * 1024 * 1024)
-                .content_type_by_string(Some(mime::IMAGE_STAR))
-                .unwrap(),
+                .content_type(Some(mime::IMAGE_STAR)),
         ],
         ..MultipartFormDataOptions::default()
     };
@@ -43,7 +42,7 @@ async fn upload(content_type: &ContentType, data: Data<'_>) -> Result<RawRespons
             }) => {
                 return Err("The request body seems too large.");
             },
-            _ => panic!("{:?}", err),
+            _ => return Err("The upload could not be parsed."),
         },
     };
 
